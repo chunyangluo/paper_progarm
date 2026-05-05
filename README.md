@@ -45,7 +45,7 @@
 | 数据存储 | `src/data_layer/` | SQLAlchemy 模型、数据库连接、检测记录与预警仓储 |
 | 实验脚本 | `scripts/experiment/` | 对比实验、训练编排、checkpoint 和结果汇总 |
 | 实验结果 | `output/experiments/` | 正式实验、消融实验、summary、checkpoint 和 worker 结果 |
-| 论文提纲 | `# 论文主要内容.ini` | 论文各章节写作主线、创新点、结果引用方式 |
+| 论文提纲 | `docs/thesis/论文主要内容.ini` | 论文各章节写作主线、创新点、结果引用方式 |
 | 可复现说明 | `docs/reproducibility_and_feasibility.md` | 复现实验、系统运行、可行性和风险边界 |
 
 ## 4. 核心模型设计
@@ -248,9 +248,10 @@ git status
 
 | 论文部分 | 推荐引用材料 |
 |----------|--------------|
-| 摘要与创新点 | `# 论文主要内容.ini`、本 README 第 1-2 节 |
-| 相关理论 | `# 论文主要内容.ini` 第二章、`src/core/models/model_definitions.py` |
-| 数据集构建 | `dataset_building_guide.md`、`data/数据集收集报告.md`、`docs/reproducibility_and_feasibility.md` |
+| 写作过程与结构 | `docs/thesis/论文写作指导建议.md` |
+| 摘要与创新点 | `docs/thesis/论文主要内容.ini`、本 README 第 1-2 节 |
+| 相关理论 | `docs/thesis/论文主要内容.ini` 第二章、`src/core/models/model_definitions.py` |
+| 数据集构建 | `docs/reports/dataset_building_guide.md`、`data/数据集收集报告.md`、`docs/reproducibility_and_feasibility.md` |
 | 模型设计 | `src/core/models/model_definitions.py`、`scripts/experiment/models.py` |
 | 系统实现 | `src/service_layer/`、`src/inference_layer/`、`frontend/src/views/` |
 | 实验设置 | `scripts/experiment/run_experiment.py`、`scripts/experiment/data_split.py` |

@@ -7,6 +7,9 @@
 import os
 from datetime import datetime
 
+_REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+_REPORTS_DIR = os.path.join(_REPO_ROOT, "docs", "reports")
+
 # 要整合的核心文件
 CORE_FILES = [
     'core/system.py',
@@ -65,7 +68,8 @@ def integrate_info():
             report += "文件不存在\n\n"
     
     # 保存报告
-    report_path = 'system_integration_report.txt'
+    os.makedirs(_REPORTS_DIR, exist_ok=True)
+    report_path = os.path.join(_REPORTS_DIR, "system_integration_report.txt")
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report)
     

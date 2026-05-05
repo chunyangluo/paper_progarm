@@ -8,6 +8,9 @@ import json
 import time
 from datetime import datetime
 
+_REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+_REPORTS_DIR = os.path.join(_REPO_ROOT, "docs", "reports")
+
 # 生成报告的主函数
 def generate_report():
     # 获取当前日期
@@ -210,9 +213,9 @@ def generate_report():
     report_content += "├── Dockerfile             # Docker构建文件\n"
     report_content += "├── docker-compose.yml     # Docker Compose配置\n"
     report_content += "├── deploy.sh              # 部署脚本\n"
-    report_content += "├── dataset_building_guide.md  # 数据集构建指南\n"
-    report_content += "├── system_architecture.md     # 系统架构文档\n"
-    report_content += "├── user_guide.md              # 用户指南\n"
+    report_content += "├── docs/reports/dataset_building_guide.md  # 数据集构建指南\n"
+    report_content += "├── docs/reports/system_architecture.md     # 系统架构文档\n"
+    report_content += "├── docs/reports/user_guide.md              # 用户指南\n"
     report_content += "└── README.md                  # 项目说明\n"
     report_content += "</div>"
     report_content += "<h3>2.2 核心模块</h3>"
@@ -644,11 +647,12 @@ def generate_report():
     report_content += "</body>"
     report_content += "</html>"
     
-    # 写入报告文件
-    with open("./project_report.html", "w", encoding="utf-8") as f:
+    os.makedirs(_REPORTS_DIR, exist_ok=True)
+    out_path = os.path.join(_REPORTS_DIR, "project_report.html")
+    with open(out_path, "w", encoding="utf-8") as f:
         f.write(report_content)
     
-    print("报告生成完成！文件保存为：project_report.html")
+    print(f"报告生成完成！文件保存为：{out_path}")
     print("\n报告特点：")
     print("1. 使用相对路径引用图片，方便移动到其他地方展示")
     print("2. 包含最新的真实世界测试结果")

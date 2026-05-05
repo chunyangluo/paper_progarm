@@ -1,6 +1,7 @@
 import urllib.request
 import json
 import time
+from pathlib import Path
 
 BASE = "http://localhost:8000"
 
@@ -165,7 +166,9 @@ if failed > 0:
         if not r["passed"]:
             print(f"  - {r['id']}: {r['name']} - {r['detail']}")
 
-with open("test_results_extended.json", "w", encoding="utf-8") as f:
+_out = Path(__file__).resolve().parent.parent / "docs" / "reports" / "test_results_extended.json"
+_out.parent.mkdir(parents=True, exist_ok=True)
+with open(_out, "w", encoding="utf-8") as f:
     json.dump({
         "summary": {"total": total, "passed": passed, "failed": failed},
         "phishing_recall": phishing_recall,
@@ -173,3 +176,4 @@ with open("test_results_extended.json", "w", encoding="utf-8") as f:
         "overall_accuracy": overall_acc,
         "results": results
     }, f, ensure_ascii=False, indent=2)
+print(f"\nResults saved to {_out}")
