@@ -96,14 +96,28 @@ python scripts/experiment/run_experiment.py ^
 
 ---
 
-## 建议
+## Git 版本管理
 
-尽快用 Git 初始化并提交，避免 README 与论文材料再次丢失：
+仓库已初始化（默认分支 `main`），根目录 `.gitignore` 会排除：`node_modules`、`venv`、日志、`*.pth` / `*.pt`、`data/**/*.csv`、本地数据库与 `src/data/raw/chifraud/`（嵌套仓库）等大文件；**实验 JSON、源码与 `models/model_versions.json` 仍被跟踪**。
+
+常用命令：
 
 ```bash
-git init
-git add README.md docs "# 论文主要内容.ini"
-git commit -m "chore: track docs and README"
+git status
+git add -A
+git commit -m "描述本次修改"
 ```
 
-如需恢复此前更长版本的 README，只能从本机备份、云盘或聊天记录中找回；当前仓库内无其他副本。
+首次在本机推送到远程前，请将提交者改为你自己的信息（当前可能为占位配置）：
+
+```bash
+git config user.name "你的名字"
+git config user.email "你的邮箱"
+```
+
+然后关联远程并推送：
+
+```bash
+git remote add origin <你的仓库 HTTPS 或 SSH 地址>
+git push -u origin main
+```
