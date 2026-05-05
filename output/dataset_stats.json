@@ -1,0 +1,67 @@
+{
+  "original": {
+    "total": 41398,
+    "label_dist": {
+      "1": 20699,
+      "0": 20699
+    },
+    "scenario_dist": {
+      "link": 285
+    },
+    "url_coverage": "10622",
+    "url_coverage_pct": 25.7,
+    "text_length": {
+      "mean": 74.5,
+      "std": 66.0,
+      "min": 6,
+      "max": 2834
+    },
+    "source_dist": {
+      "phiUSIIL": 5000,
+      "phishTank": 4999,
+      "tranco": 333,
+      "openphish": 285
+    }
+  },
+  "expanded": {
+    "total": 49398,
+    "label_dist": {
+      "1": 24699,
+      "0": 24699
+    },
+    "scenario_dist": {
+      "sms": 2723,
+      "email": 2173,
+      "general": 2104,
+      "link": 1285
+    },
+    "url_coverage": "14622",
+    "url_coverage_pct": 29.6,
+    "text_length": {
+      "mean": 70.9,
+      "std": 62.4,
+      "min": 6,
+      "max": 2834
+    },
+    "source_dist": {
+      "phiUSIIL": 5000,
+      "phishTank": 4999,
+      "synthetic_normal_general": 2104,
+      "synthetic_sms": 1500,
+      "synthetic_email": 1500,
+      "synthetic_normal_sms": 1223,
+      "synthetic_link": 1000,
+      "synthetic_normal_email": 673,
+      "tranco": 333,
+      "openphish": 285
+    },
+    "phishing_ratio": 50.0,
+    "normal_ratio": 50.0
+  },
+  "incremental": {
+    "new_phishing": "4000",
+    "new_normal": "4000",
+    "total_new": "8000",
+    "growth_rate": 19.3
+  }
+}

@@ -1,0 +1,56 @@
+# 配置文件
+
+# 模型配置
+model:
+  bert_textcnn:
+    model_path: "models/bert_textcnn_best.pth"
+    max_length: 128
+    batch_size: 64
+    learning_rate: 0.00001
+    epochs: 10
+  multimodal:
+    model_path: "models/multimodal_best.pth"
+    max_length: 128
+    batch_size: 64
+    learning_rate: 0.00001
+    epochs: 10
+  textcnn:
+    model_path: "models/textcnn_best.pth"
+    max_features: 5000
+    ngram_range: [1, 2]
+    batch_size: 64
+    learning_rate: 0.001
+    epochs: 10
+
+# 数据配置
+data:
+  dataset_path: "data/versions/dataset_20260411_chifraud.csv"
+  test_size: 0.2
+  val_size: 0.2
+  random_state: 42
+
+# 训练配置
+training:
+  device: "cuda"
+  num_workers: 4
+  pin_memory: true
+  drop_last: true
+  prefetch_factor: 2
+  persistent_workers: true
+
+# 推理配置
+inference:
+  batch_size: 32
+  timeout: 5
+
+# 网络配置
+network:
+  timeout: 5
+  max_retries: 3
+  batch_size: 100
+  delay: 0.1
+
+# 日志配置
+logging:
+  level: "INFO"
+  log_dir: "logs"

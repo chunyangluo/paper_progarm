@@ -1,0 +1,84 @@
+{
+  "summary": {
+    "total": 12,
+    "passed": 12,
+    "failed": 0
+  },
+  "phishing_recall": 1.0,
+  "normal_precision": 1.0,
+  "overall_accuracy": 1.0,
+  "results": [
+    {
+      "id": "TC-E1",
+      "name": "Phishing recall >= 80%",
+      "passed": true,
+      "detail": "recall=100.0%"
+    },
+    {
+      "id": "TC-E2",
+      "name": "Normal precision >= 80%",
+      "passed": true,
+      "detail": "precision=100.0%"
+    },
+    {
+      "id": "TC-E3",
+      "name": "Empty text returns error",
+      "passed": true,
+      "detail": "status=422"
+    },
+    {
+      "id": "TC-E4",
+      "name": "Single char text accepted",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "id": "TC-E5",
+      "name": "Nonexistent alert returns 404",
+      "passed": true,
+      "detail": "status=404"
+    },
+    {
+      "id": "TC-E6",
+      "name": "Nonexistent sample returns 404",
+      "passed": true,
+      "detail": "status=404"
+    },
+    {
+      "id": "TC-E7",
+      "name": "Nonexistent training task returns 404",
+      "passed": true,
+      "detail": "status=404"
+    },
+    {
+      "id": "TC-E8",
+      "name": "Long text handled",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "id": "TC-E9",
+      "name": "XSS-like input handled",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "id": "TC-E10",
+      "name": "SQL injection-like input handled",
+      "passed": true,
+      "detail": "status=200"
+    },
+    {
+      "id": "TC-E11",
+      "name": "Stats reflect previous detections",
+      "passed": true,
+      "detail": "total=100"
+    },
+    {
+      "id": "TC-E12",
+      "name": "Previously created samples persist",
+      "passed": true,
+      "detail": "count=6"
+    }
+  ]
+}

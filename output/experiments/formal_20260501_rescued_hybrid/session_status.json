@@ -1,0 +1,38 @@
+{
+  "updated_at": "2026-05-01T23:05:10",
+  "session_dir": "C:\\Users\\chuny\\Desktop\\paper_progarm\\output\\experiments\\formal_20260501_rescued_hybrid",
+  "checkpoint_path": "C:\\Users\\chuny\\Desktop\\paper_progarm\\output\\experiments\\formal_20260501_rescued_hybrid\\checkpoint.json",
+  "orchestrator": {
+    "running": false,
+    "pid": null,
+    "command": null
+  },
+  "worker": {
+    "state": "no_worker_process_detected"
+  },
+  "progress": {
+    "completed_pairs": [
+      "BERT-TextCNN__seed_123",
+      "BERT-TextCNN__seed_42",
+      "BERT-TextCNN__seed_456"
+    ],
+    "failed_pairs": {},
+    "planned_pairs": [
+      "BERT-TextCNN__seed_42",
+      "BERT-TextCNN__seed_123",
+      "BERT-TextCNN__seed_456"
+    ],
+    "remaining_pairs": [],
+    "completed": 3,
+    "total": 3,
+    "percent": 100.0,
+    "in_progress_pair": null,
+    "completed_pairs_in_plan": [
+      "BERT-TextCNN__seed_42",
+      "BERT-TextCNN__seed_123",
+      "BERT-TextCNN__seed_456"
+    ],
+    "not_started_pairs": [],
+    "pending_pairs": []
+  }
+}

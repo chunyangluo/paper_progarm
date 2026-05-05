@@ -1,0 +1,60 @@
+{
+  "collection_date": "2026-04-21T00:15:17.547367",
+  "existing_samples": 41398,
+  "new_samples_collected": 8000,
+  "new_samples_after_preprocessing": 5971,
+  "combined_samples": 47369,
+  "collection_stats": {
+    "phishing_sms": 1500,
+    "phishing_email": 1500,
+    "phishing_link": 1000,
+    "normal_sms": 1500,
+    "normal_email": 1000,
+    "normal_general": 1500,
+    "total_phishing": 4000,
+    "total_normal": 4000
+  },
+  "validation_results": {
+    "label_balance": {
+      "1": 4000,
+      "0": 1971
+    },
+    "scenario_coverage": {
+      "sms": 2723,
+      "email": 2173,
+      "link": 1000,
+      "general": 75
+    },
+    "text_length_new": {
+      "mean": 63.265617149556185,
+      "std": 30.141516389382115,
+      "min": 14,
+      "max": 137
+    },
+    "text_length_existing": {
+      "mean": 74.5347842890961,
+      "std": 66.02209192561281,
+      "min": 6,
+      "max": 2834
+    },
+    "keyword_coverage": "16/16",
+    "null_check": {
+      "text_null": 0,
+      "label_null": 0
+    },
+    "duplicate_check": 0,
+    "overlap_with_existing": 0,
+    "passed": true
+  },
+  "combined_label_distribution": {
+    "1": 24699,
+    "0": 22670
+  },
+  "combined_scenario_distribution": {
+    "sms": 2723,
+    "email": 2173,
+    "link": 1285,
+    "general": 75
+  },
+  "output_file": "C:\\Users\\chuny\\Desktop\\paper_progarm\\data\\versions\\dataset_20260421_expanded.csv"
+}

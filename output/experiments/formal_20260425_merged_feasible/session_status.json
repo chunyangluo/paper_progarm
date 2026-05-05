@@ -1,0 +1,80 @@
+{
+  "updated_at": "2026-05-01T23:05:13",
+  "session_dir": "C:\\Users\\chuny\\Desktop\\paper_progarm\\output\\experiments\\formal_20260425_merged_feasible",
+  "checkpoint_path": "C:\\Users\\chuny\\Desktop\\paper_progarm\\output\\experiments\\formal_20260425_merged_feasible\\checkpoint.json",
+  "orchestrator": {
+    "running": false,
+    "pid": null,
+    "command": null
+  },
+  "worker": {
+    "state": "no_worker_process_detected"
+  },
+  "progress": {
+    "completed_pairs": [
+      "BERT-TextCNN__seed_123",
+      "BERT-TextCNN__seed_42",
+      "BERT-TextCNN__seed_456",
+      "BERT__seed_123",
+      "BERT__seed_42",
+      "BERT__seed_456",
+      "LSTM__seed_123",
+      "LSTM__seed_42",
+      "LSTM__seed_456",
+      "Multimodal-text_only__seed_123",
+      "Multimodal-text_only__seed_42",
+      "Multimodal-text_only__seed_456",
+      "Multimodal-text_url__seed_123",
+      "Multimodal-text_url__seed_42",
+      "Multimodal-text_url__seed_456",
+      "TF-IDF+LR__seed_123",
+      "TF-IDF+LR__seed_42",
+      "TF-IDF+LR__seed_456",
+      "TextCNN__seed_123",
+      "TextCNN__seed_42",
+      "TextCNN__seed_456"
+    ],
+    "failed_pairs": {},
+    "planned_pairs": [
+      "BERT__seed_42",
+      "BERT__seed_123",
+      "BERT__seed_456",
+      "LSTM__seed_42",
+      "LSTM__seed_123",
+      "LSTM__seed_456",
+      "BERT-TextCNN__seed_42",
+      "BERT-TextCNN__seed_123",
+      "BERT-TextCNN__seed_456",
+      "Multimodal-text_only__seed_42",
+      "Multimodal-text_only__seed_123",
+      "Multimodal-text_only__seed_456",
+      "Multimodal-text_url__seed_42",
+      "Multimodal-text_url__seed_123",
+      "Multimodal-text_url__seed_456"
+    ],
+    "remaining_pairs": [],
+    "completed": 15,
+    "total": 15,
+    "percent": 100.0,
+    "in_progress_pair": null,
+    "completed_pairs_in_plan": [
+      "BERT__seed_42",
+      "BERT__seed_123",
+      "BERT__seed_456",
+      "LSTM__seed_42",
+      "LSTM__seed_123",
+      "LSTM__seed_456",
+      "BERT-TextCNN__seed_42",
+      "BERT-TextCNN__seed_123",
+      "BERT-TextCNN__seed_456",
+      "Multimodal-text_only__seed_42",
+      "Multimodal-text_only__seed_123",
+      "Multimodal-text_only__seed_456",
+      "Multimodal-text_url__seed_42",
+      "Multimodal-text_url__seed_123",
+      "Multimodal-text_url__seed_456"
+    ],
+    "not_started_pairs": [],
+    "pending_pairs": []
+  }
+}

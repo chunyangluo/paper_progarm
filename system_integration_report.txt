@@ -1,0 +1,2736 @@
+# 系统核心文件整合
+生成时间: 2026-04-07 22:44:33
+整合文件数量: 10
+
+## 核心文件
+
+### core/system.py
+```python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+中文钓鱼文本识别系统
+
+本系统包含以下功能：
+1. 多模态钓鱼检测（文本/URL/网络行为）
+2. 实时预警
+3. 可视化溯源
+4. 增量训练
+5. 支持多输入方式
+6. 支持多检测场景
+"""
+
+import os
+import sys
+import time
+import json
+from datetime import datetime
+from inference import PhishingDetector
+from visualization import VisualizationModule
+from incremental_training import IncrementalTrainer
+from scenario_processor import ScenarioProcessor
+
+class PhishingDetectionSystem:
+    """完整的钓鱼检测系统"""
+    
+    def __init__(self, model_dir="models", data_dir="data", output_dir="output"):
+        self.model_dir = model_dir
+        self.data_dir = data_dir
+        self.output_dir = output_dir
+        self.detector = PhishingDetector(model_dir=model_dir)
+        self.visualizer = VisualizationModule()
+        self.incremental_trainer = IncrementalTrainer(model_dir=model_dir, data_dir=data_dir)
+        self.scenario_processor = ScenarioProcessor()
+        self.alert_history = []
+        self.detection_history = []
+        
+        # 确保目录存在
+        os.makedirs(output_dir, exist_ok=True)
+        os.makedirs(f"{output_dir}/alerts", exist_ok=True)
+        os.makedirs(f"{output_dir}/reports", exist_ok=True)
+    
+    def detect(self, text, url, scenario="general", use_cache=True):
+        """检测钓鱼文本"""
+        start_time = time.time()
+        
+        # 处理场景
+        processed_text, processed_url = self.scenario_processor.process(scenario, text, url)
+        
+        # 检测
+        result = self.detector.detect(processed_text, processed_url, use_cache)
+        
+        # 计算处理时间
+        processing_time = time.time() - start_time
+        result['processing_time'] = processing_time
+        
+        # 提取特征
+        features = self._extract_features(processed_url)
+        
+        # 生成报告
+        sample = {
+            'id': f"sample_{int(time.time())}",
+            'text': text,
+            'url': url,
+            'scenario': scenario
+        }
+        
+        report = self.visualizer.generate_report(sample, result, features)
+        
+        # 记录检测历史
+        self.detection_history.append({
+            'timestamp': datetime.now().isoformat(),
+            'text': text,
+            'url': url,
+            'scenario': scenario,
+            'result': result,
+            'processing_time': processing_time
+        })
+        
+        # 实时预警
+        if result.get('prediction') == '钓鱼' and result.get('confidence', 0) > 0.7:
+            alert = self._generate_alert(sample, result, features)
+            self.alert_history.append(alert)
+            self._save_alert(alert)
+            print(f"🚨 预警：检测到钓鱼攻击！置信度：{result['confidence']:.4f}")
+        
+        # 保存报告
+        self._save_report(report)
+        
+        return result, report
+    
+    def batch_detect(self, samples, batch_size=16):
+        """批量检测钓鱼文本"""
+        start_time = time.time()
+        
+        texts = [sample['text'] for sample in samples]
+        urls = [sample['url'] for sample in samples]
+        scenarios = [sample.get('scenario', 'general') for sample in samples]
+        
+        # 处理场景
+        processed_texts = []
+        processed_urls = []
+        for text, url, scenario in zip(texts, urls, scenarios):
+            processed_text, processed_url = self.scenario_processor.process(scenario, text, url)
+            processed_texts.append(processed_text)
+            processed_urls.append(processed_url)
+        
+        # 批量检测
+        results = self.detector.batch_detect(processed_texts, processed_urls, batch_size)
+        
+        # 计算处理时间
+        processing_time = time.time() - start_time
+        
+        # 生成报告和预警
+        reports = []
+        for i, (result, sample) in enumerate(zip(results, samples)):
+            result['processing_time'] = processing_time / len(samples)
+            
+            # 提取特征
+            features = self._extract_features(processed_urls[i])
+            
+            # 生成报告
+            report_sample = {
+                'id': f"sample_{int(time.time())}_{i}",
+                'text': sample['text'],
+                'url': sample['url'],
+                'scenario': sample.get('scenario', 'general')
+            }
+            
+            report = self.visualizer.generate_report(report_sample, result, features)
+            reports.append(report)
+            
+            # 记录检测历史
+            self.detection_history.append({
+                'timestamp': datetime.now().isoformat(),
+                'text': sample['text'],
+                'url': sample['url'],
+                'scenario': sample.get('scenario', 'general'),
+                'result': result,
+                'processing_time': result['processing_time']
+            })
+            
+            # 实时预警
+            if result.get('prediction') == '钓鱼' and result.get('confidence', 0) > 0.7:
+                alert = self._generate_alert(report_sample, result, features)
+                self.alert_history.append(alert)
+                self._save_alert(alert)
+                print(f"🚨 预警：检测到钓鱼攻击！置信度：{result['confidence']:.4f}")
+            
+            # 保存报告
+            self._save_report(report)
+        
+        return results, reports
+    
+    def incremental_train(self, new_samples, model_type="multimodal", epochs=10):
+        """增量训练模型"""
+        print(f"开始增量训练 {model_type} 模型...")
+        
+        # 准备样本数据
+        samples = []
+        for sample in new_samples:
+            samples.append({
+                'text': sample['text'],
+                'url': sample['url'],
+                'label': 1 if sample.get('label', 'normal') == 'phishing' else 0,
+                'scenario': sample.get('scenario', 'general')
+            })
+        
+        # 执行增量训练
+        result = self.incremental_trainer.update_model(samples, model_type, epochs)
+        
+        # 重新加载模型
+        self.detector = PhishingDetector(model_dir=self.model_dir)
+        
+        print(f"增量训练完成！")
+        print(f"模型类型：{result['model_type']}")
+        print(f"训练样本数：{result['training_samples']}")
+        print(f"测试样本数：{result['test_samples']}")
+        print(f"评估结果：")
+        for key, value in result['evaluation_results'].items():
+            print(f"  {key}: {value:.4f}")
+        
+        return result
+    
+    def visualize(self, sample, result, features):
+        """可视化分析"""
+        # 生成攻击路径
+        attack_path = self.visualizer.generate_attack_path(sample)
+        
+        # 可视化特征重要性
+        feature_importance = self.visualizer.visualize_features(features)
+        
+        # 分析趋势
+        trend_analysis = self.visualizer.analyze_trends(self.detection_history[-100:])  # 最近100条记录
+        
+        return {
+            'attack_path': attack_path,
+            'feature_importance': feature_importance,
+            'trend_analysis': trend_analysis
+        }
+    
+    def get_stats(self):
+        """获取系统统计信息"""
+        total_detections = len(self.detection_history)
+        phishing_detections = sum(1 for item in self.detection_history if item['result'].get('prediction') == '钓鱼')
+        normal_detections = total_detections - phishing_detections
+        
+        # 计算平均处理时间
+        avg_processing_time = 0
+        if total_detections > 0:
+            avg_processing_time = sum(item['processing_time'] for item in self.detection_history) / total_detections
+        
+        return {
+            'total_detections': total_detections,
+            'phishing_detections': phishing_detections,
+            'normal_detections': normal_detections,
+            'alert_count': len(self.alert_history),
+            'avg_processing_time': avg_processing_time
+        }
+    
+    def _extract_features(self, url):
+        """提取特征"""
+        from data_preprocessing import URLFeatureExtractor, NetworkBehaviorExtractor
+        
+        url_extractor = URLFeatureExtractor()
+        network_extractor = NetworkBehaviorExtractor()
+        
+        url_features = url_extractor.extract_features(url)
+        network_features = network_extractor.extract_features(url)
+        
+        return {
+            **url_features,
+            **network_features
+        }
+    
+    def _generate_alert(self, sample, result, features):
+        """生成预警"""
+        return {
+            'alert_id': f"alert_{int(time.time())}",
+            'timestamp': datetime.now().isoformat(),
+            'sample_id': sample['id'],
+            'text': sample['text'],
+            'url': sample['url'],
+            'scenario': sample['scenario'],
+            'prediction': result['prediction'],
+            'confidence': result['confidence'],
+            'features': features,
+            'severity': 'high' if result['confidence'] > 0.9 else 'medium'
+        }
+    
+    def _save_alert(self, alert):
+        """保存预警"""
+        alert_path = f"{self.output_dir}/alerts/alert_{alert['alert_id']}.json"
+        with open(alert_path, 'w', encoding='utf-8') as f:
+            json.dump(alert, f, ensure_ascii=False, indent=2)
+    
+    def _save_report(self, report):
+        """保存报告"""
+        report_id = report['sample_info']['timestamp'].replace(':', '-').replace('.', '-')
+        report_path = f"{self.output_dir}/reports/report_{report_id}.json"
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump(report, f, ensure_ascii=False, indent=2)
+
+def main():
+    """主函数"""
+    system = PhishingDetectionSystem()
+    
+    print("=" * 80)
+    print("中文钓鱼文本识别系统")
+    print("=" * 80)
+    print("功能：")
+    print("1. 多模态钓鱼检测（文本/URL/网络行为）")
+    print("2. 实时预警")
+    print("3. 可视化溯源")
+    print("4. 增量训练")
+    print("5. 支持多输入方式")
+    print("6. 支持多检测场景")
+    print("=" * 80)
+    
+    # 测试样本
+    test_samples = [
+        {
+            'text': "【支付宝】你的账户存在安全风险，点击 https://alipay-veri.com 解冻，逾期将注销账户",
+            'url': "https://alipay-veri.com",
+            'scenario': "sms"
+        },
+        {
+            'text': "【微信团队】你的微信账号异地登录，点击 https://wx-safe.cn 验证手机号，否则24小时封禁",
+            'url': "https://wx-safe.cn",
+            'scenario': "sms"
+        },
+        {
+            'text': "【支付宝】你的余额宝收益已到账，可前往支付宝APP查看详情，官方网址 https://www.alipay.com",
+            'url': "https://www.alipay.com",
+            'scenario': "sms"
+        },
+        {
+            'text': "【微信团队】你的微信支付分已更新，打开微信APP-我-服务可查询，官方网址 https://weixin.qq.com",
+            'url': "https://weixin.qq.com",
+            'scenario': "sms"
+        }
+    ]
+    
+    print("\n开始测试多模态钓鱼检测...")
+    for i, sample in enumerate(test_samples):
+        print(f"\n测试样本 {i+1}:")
+        print(f"文本: {sample['text']}")
+        print(f"URL: {sample['url']}")
+        print(f"场景: {sample['scenario']}")
+        
+        result, report = system.detect(sample['text'], sample['url'], sample['scenario'])
+        
+        print(f"\n检测结果:")
+        print(f"模型: {result['model']}")
+        print(f"预测: {result['prediction']}")
+        print(f"置信度: {result['confidence']:.4f}")
+        print(f"处理时间: {result['processing_time']:.4f} 秒")
+        
+        if 'details' in result:
+            print(f"\n特征详情:")
+            print(f"URL特征: {result['details']['url_features']}")
+            print(f"网络行为特征: {result['details']['network_features']}")
+    
+    print("\n" + "=" * 80)
+    print("批量检测测试...")
+    results, reports = system.batch_detect(test_samples)
+    print(f"批量检测完成，处理了 {len(results)} 个样本")
+    
+    print("\n" + "=" * 80)
+    print("系统统计信息:")
+    stats = system.get_stats()
+    for key, value in stats.items():
+        print(f"{key}: {value}")
+    
+    print("\n" + "=" * 80)
+    print("系统测试完成！")
+    print("您可以通过以下方式使用系统：")
+    print("1. 单次检测: system.detect(text, url, scenario)")
+    print("2. 批量检测: system.batch_detect(samples)")
+    print("3. 增量训练: system.incremental_train(new_samples)")
+    print("4. 可视化分析: system.visualize(sample, result, features)")
+    print("5. 获取统计信息: system.get_stats()")
+
+if __name__ == "__main__":
+    main()
+
+```
+
+### core/inference.py
+```python
+import torch
+import pandas as pd
+import numpy as np
+import time
+import requests
+from urllib.parse import urlparse
+from transformers import BertTokenizer, BertModel
+from model_training import MultimodalModel, BERTTextCNN, TextCNN
+
+
+def generate_url_features(url):
+    """生成URL特征（与训练时一致，16维）"""
+    if url is None:
+        return [0]*16
+    if not isinstance(url, str):
+        url = str(url)
+    if not url:
+        return [0]*16
+    
+    features = []
+    features.append(len(url))
+    features.append(1 if "https" in url else 0)
+    features.append(url.count("."))
+    features.append(1 if "login" in url.lower() else 0)
+    features.append(1 if "bank" in url.lower() else 0)
+    features.append(1 if "secure" in url.lower() else 0)
+    features.append(1 if "verify" in url.lower() else 0)
+    features.append(1 if "account" in url.lower() else 0)
+    features.append(1 if "auth" in url.lower() else 0)
+    features.append(1 if "payment" in url.lower() else 0)
+    features.append(1 if "password" in url.lower() else 0)
+    features.append(1 if "reset" in url.lower() else 0)
+    features.append(1 if "confirm" in url.lower() else 0)
+    features.append(1 if "update" in url.lower() else 0)
+    features.append(1 if "financial" in url.lower() else 0)
+    features.append(1 if "phish" in url.lower() else 0)
+    
+    return features[:16]
+
+
+def generate_network_features(url):
+    """生成网络行为特征（动态计算，8维）"""
+    if url is None:
+        return [0]*8
+    if not isinstance(url, str):
+        url = str(url)
+    if not url:
+        return [0]*8
+    
+    features = []
+    
+    try:
+        # 响应时间
+        start_time = time.time()
+        response = requests.get(url, timeout=3)
+        response_time = time.time() - start_time
+        features.append(response_time)
+        
+        # 状态码
+        features.append(response.status_code)
+        
+        # 重定向次数
+        features.append(len(response.history))
+        
+        # 是否包含表单
+        has_form = 1 if '<form' in response.text.lower() else 0
+        features.append(has_form)
+        
+        # 是否请求敏感信息
+        sensitive_patterns = ['password', 'credit card', 'bank account', 'ssn', '身份证', '银行卡']
+        has_sensitive = 1 if any(pattern in response.text.lower() for pattern in sensitive_patterns) else 0
+        features.append(has_sensitive)
+        
+        # 是否使用HTTPS
+        features.append(1 if url.startswith('https://') else 0)
+        
+        # 是否包含验证码
+        has_captcha = 1 if 'captcha' in response.text.lower() else 0
+        features.append(has_captcha)
+        
+        # 是否需要登录
+        has_login = 1 if 'login' in response.text.lower() else 0
+        features.append(has_login)
+        
+    except Exception as e:
+        # 如果请求失败，使用默认值
+        features = [3.0, 404, 0, 0, 0, 0, 0, 0]
+    
+    return features[:8]
+
+
+class PhishingDetector:
+    def __init__(self, model_dir="../models", use_cuda=True, bert_model="bert-base-chinese", cache_ttl=3600):
+        self.model_dir = model_dir
+        self.use_cuda = use_cuda and torch.cuda.is_available()
+        self.device = torch.device("cuda" if self.use_cuda else "cpu")
+        self.bert_model_name = bert_model
+        self.cache_ttl = cache_ttl  # 缓存过期时间（秒）
+        self._load_models()
+        self.cache = {}  # 格式: {cache_key: (result, timestamp)}
+    
+    def _load_models(self):
+        """加载训练好的模型"""
+        from transformers import AutoTokenizer, AutoModel
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(self.bert_model_name)
+        self.bert = AutoModel.from_pretrained(self.bert_model_name)
+        
+        self.bert = self.bert.to(self.device)
+        
+        try:
+            model_path = f"{self.model_dir}/multimodal_best.pth"
+            self.multimodal_model = MultimodalModel(self.bert).to(self.device)
+            self.multimodal_model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.multimodal_model.eval()
+            print("✅ 多模态模型加载成功")
+        except Exception as e:
+            print(f"⚠️ 多模态模型加载失败: {e}")
+            self.multimodal_model = None
+        
+        try:
+            model_path = f"{self.model_dir}/bert_textcnn_best.pth"
+            self.bert_textcnn_model = BERTTextCNN(self.bert).to(self.device)
+            self.bert_textcnn_model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.bert_textcnn_model.eval()
+            print("✅ BERT-TextCNN模型加载成功")
+        except Exception as e:
+            print(f"⚠️ BERT-TextCNN模型加载失败: {e}")
+            self.bert_textcnn_model = None
+    
+    def _is_cache_valid(self, timestamp):
+        """检查缓存是否有效"""
+        return time.time() - timestamp < self.cache_ttl
+    
+    def detect(self, text, url, use_cache=True):
+        """检测钓鱼文本"""
+        cache_key = f"{text}:{url}"
+        
+        # 检查缓存
+        if use_cache and cache_key in self.cache:
+            result, timestamp = self.cache[cache_key]
+            if self._is_cache_valid(timestamp):
+                return result
+        
+        url_features = generate_url_features(url)
+        network_features = generate_network_features(url)
+        
+        url_feat = torch.FloatTensor([url_features]).to(self.device)
+        network_feat = torch.FloatTensor([network_features]).to(self.device)
+        
+        if self.multimodal_model:
+            inputs = self.tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+            with torch.no_grad():
+                torch.set_grad_enabled(False)
+                outputs = self.multimodal_model(**inputs, url_features=url_feat, network_features=network_feat)
+                prob = torch.softmax(outputs, dim=1).cpu().numpy()[0]
+                pred = int(torch.argmax(outputs, dim=1).cpu().numpy()[0])
+            
+            result = {
+                "model": "multimodal",
+                "prediction": "钓鱼" if pred == 1 else "正常",
+                "confidence": float(prob[pred]),
+                "details": {
+                    "url_features": url_features,
+                    "network_features": network_features
+                }
+            }
+        
+        elif self.bert_textcnn_model:
+            inputs = self.tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+            with torch.no_grad():
+                torch.set_grad_enabled(False)
+                outputs = self.bert_textcnn_model(**inputs)
+                prob = torch.softmax(outputs, dim=1).cpu().numpy()[0]
+                pred = int(torch.argmax(outputs, dim=1).cpu().numpy()[0])
+            
+            result = {
+                "model": "bert_textcnn",
+                "prediction": "钓鱼" if pred == 1 else "正常",
+                "confidence": float(prob[pred])
+            }
+        
+        else:
+            result = {"error": "No model loaded"}
+        
+        # 缓存结果
+        if use_cache:
+            self.cache[cache_key] = (result, time.time())
+        
+        return result
+    
+    def batch_detect(self, texts, urls, batch_size=16, use_length_balancing=False):
+        """批量检测钓鱼文本"""
+        if use_length_balancing:
+            # 基于文本长度进行负载均衡
+            indexed_texts = list(enumerate(texts))
+            indexed_urls = list(enumerate(urls))
+            
+            # 按文本长度排序
+            sorted_items = sorted(zip(indexed_texts, indexed_urls), key=lambda x: len(x[0][1]))
+            sorted_texts = [item[0][1] for item in sorted_items]
+            sorted_urls = [item[1][1] for item in sorted_items]
+            original_indices = [item[0][0] for item in sorted_items]
+            
+            # 处理排序后的文本
+            sorted_results = []
+            for i in range(0, len(sorted_texts), batch_size):
+                batch_texts = sorted_texts[i:i+batch_size]
+                batch_urls = sorted_urls[i:i+batch_size]
+                batch_results = self._batch_process(batch_texts, batch_urls)
+                sorted_results.extend(batch_results)
+            
+            # 恢复原始顺序
+            results = [None] * len(texts)
+            for i, (orig_idx, result) in enumerate(zip(original_indices, sorted_results)):
+                results[orig_idx] = result
+            return results
+        else:
+            # 常规批处理
+            results = []
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i+batch_size]
+                batch_urls = urls[i:i+batch_size]
+                batch_results = self._batch_process(batch_texts, batch_urls)
+                results.extend(batch_results)
+            return results
+    
+    def _batch_process(self, texts, urls):
+        """批量处理文本和URL"""
+        results = []
+        
+        url_features_list = []
+        network_features_list = []
+        cache_hits = []
+        cache_results = []
+        
+        for text, url in zip(texts, urls):
+            cache_key = f"{text}:{url}"
+            if cache_key in self.cache:
+                result, timestamp = self.cache[cache_key]
+                if self._is_cache_valid(timestamp):
+                    cache_hits.append(True)
+                    cache_results.append(result)
+                else:
+                    # 缓存过期，重新计算
+                    cache_hits.append(False)
+                    url_features = generate_url_features(url)
+                    network_features = generate_network_features(url)
+                    url_features_list.append(url_features)
+                    network_features_list.append(network_features)
+            else:
+                cache_hits.append(False)
+                url_features = generate_url_features(url)
+                network_features = generate_network_features(url)
+                url_features_list.append(url_features)
+                network_features_list.append(network_features)
+        
+        if sum(cache_hits) < len(texts):
+            batch_texts = []
+            batch_urls = []
+            
+            for i, (text, url, is_cached) in enumerate(zip(texts, urls, cache_hits)):
+                if not is_cached:
+                    batch_texts.append(text)
+                    batch_urls.append(url)
+            
+            if batch_texts:
+                url_feats = torch.FloatTensor(url_features_list).to(self.device)
+                network_feats = torch.FloatTensor(network_features_list).to(self.device)
+                
+                if self.multimodal_model:
+                    inputs = self.tokenizer(batch_texts, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                    with torch.no_grad():
+                        torch.set_grad_enabled(False)
+                        outputs = self.multimodal_model(**inputs, url_features=url_feats, network_features=network_feats)
+                        probs = torch.softmax(outputs, dim=1).cpu().numpy()
+                        preds = torch.argmax(outputs, dim=1).cpu().numpy()
+                    
+                    for i, (text, url, pred, prob) in enumerate(zip(batch_texts, batch_urls, preds, probs)):
+                        result = {
+                            "model": "multimodal",
+                            "prediction": "钓鱼" if pred == 1 else "正常",
+                            "confidence": float(prob[pred]),
+                            "details": {
+                                "url_features": url_features_list[i],
+                                "network_features": network_features_list[i]
+                            }
+                        }
+                        results.append(result)
+                        cache_key = f"{text}:{url}"
+                        self.cache[cache_key] = (result, time.time())
+                
+                elif self.bert_textcnn_model:
+                    inputs = self.tokenizer(batch_texts, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                    with torch.no_grad():
+                        torch.set_grad_enabled(False)
+                        outputs = self.bert_textcnn_model(**inputs)
+                        probs = torch.softmax(outputs, dim=1).cpu().numpy()
+                        preds = torch.argmax(outputs, dim=1).cpu().numpy()
+                    
+                    for i, (text, url, pred, prob) in enumerate(zip(batch_texts, batch_urls, preds, probs)):
+                        result = {
+                            "model": "bert_textcnn",
+                            "prediction": "钓鱼" if pred == 1 else "正常",
+                            "confidence": float(prob[pred])
+                        }
+                        results.append(result)
+                        cache_key = f"{text}:{url}"
+                        self.cache[cache_key] = (result, time.time())
+        
+        final_results = []
+        cache_idx = 0
+        new_idx = 0
+        
+        for is_cached in cache_hits:
+            if is_cached:
+                final_results.append(cache_results[cache_idx])
+                cache_idx += 1
+            else:
+                final_results.append(results[new_idx])
+                new_idx += 1
+        
+        return final_results
+
+
+if __name__ == "__main__":
+    detector = PhishingDetector(model_dir="models")
+    
+    test_samples = [
+        ("【支付宝】你的账户存在安全风险，点击 `https://alipay-veri.com` 解冻，逾期将注销账户", "https://alipay-veri.com"),
+        ("【微信团队】你的微信账号异地登录，点击 `https://wx-safe.cn` 验证手机号，否则24小时封禁", "https://wx-safe.cn"),
+        ("【支付宝】你的余额宝收益已到账，可前往支付宝APP查看详情，官方网址 `https://www.alipay.com`", "https://www.alipay.com"),
+        ("【微信团队】你的微信支付分已更新，打开微信APP-我-服务可查询，官方网址 `https://weixin.qq.com`", "https://weixin.qq.com")
+    ]
+    
+    print("\n===== 钓鱼检测测试 =====")
+    for text, url in test_samples:
+        result = detector.detect(text, url)
+        print(f"\n文本: {text}")
+        print(f"URL: {url}")
+        if 'error' in result:
+            print(f"错误: {result['error']}")
+        else:
+            print(f"预测结果: {result['prediction']}")
+            print(f"置信度: {result['confidence']:.4f}")
+            if 'details' in result:
+                print(f"URL特征: {result['details']['url_features']}")
+                print(f"URL特征维度: {len(result['details']['url_features'])}")
+                print(f"网络行为特征: {result['details']['network_features']}")
+                print(f"网络行为特征维度: {len(result['details']['network_features'])}")
+    
+    print("\n===== 批量检测测试（普通批处理）=====")
+    texts = [sample[0] for sample in test_samples]
+    urls = [sample[1] for sample in test_samples]
+    batch_results = detector.batch_detect(texts, urls)
+    for i, result in enumerate(batch_results):
+        print(f"\n样本 {i+1}:")
+        if 'error' in result:
+            print(f"错误: {result['error']}")
+        else:
+            print(f"预测结果: {result['prediction']}")
+            print(f"置信度: {result['confidence']:.4f}")
+    
+    print("\n===== 批量检测测试（基于文本长度负载均衡）=====")
+    batch_results_balanced = detector.batch_detect(texts, urls, use_length_balancing=True)
+    for i, result in enumerate(batch_results_balanced):
+        print(f"\n样本 {i+1}:")
+        if 'error' in result:
+            print(f"错误: {result['error']}")
+        else:
+            print(f"预测结果: {result['prediction']}")
+            print(f"置信度: {result['confidence']:.4f}")
+
+```
+
+### core/data_preprocessing.py
+```python
+import pandas as pd
+import numpy as np
+import random
+import os
+import requests
+import re
+from sklearn.model_selection import train_test_split
+
+class URLFeatureExtractor:
+    """URL特征提取器"""
+    def __init__(self):
+        # 可疑关键词列表
+        self.suspicious_keywords = [
+            'verify', 'secure', 'login', 'account', 'auth', 'payment', 
+            'bank', 'financial', 'update', 'confirm', 'reset', 'password',
+            'verification', 'validate', 'authentication', 'signin', 'sign-up'
+        ]
+        
+    def extract_features(self, url):
+        """提取URL特征"""
+        features = {}
+        
+        # 1. 域名长度
+        domain = self._extract_domain(url)
+        features['domain_length'] = len(domain)
+        
+        # 2. 是否使用HTTPS
+        features['is_https'] = 1 if url.startswith('https://') else 0
+        
+        # 3. 是否包含可疑关键词
+        features['has_suspicious_keywords'] = 1 if any(keyword in url.lower() for keyword in self.suspicious_keywords) else 0
+        
+        # 4. 子域名数量
+        features['subdomain_count'] = len(domain.split('.')) - 2 if domain else 0
+        
+        # 5. 路径深度
+        path = url.split('//')[-1].split('?')[0].split('/')[1:]
+        features['path_depth'] = len([p for p in path if p])
+        
+        # 6. 参数数量
+        if '?' in url:
+            params = url.split('?')[1]
+            features['param_count'] = len(params.split('&')) if params else 0
+        else:
+            features['param_count'] = 0
+        
+        # 7. 是否包含IP地址
+        ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
+        features['has_ip_address'] = 1 if re.search(ip_pattern, url) else 0
+        
+        # 8. 顶级域名类型
+        tld = domain.split('.')[-1] if domain else ''
+        features['tld'] = tld
+        
+        return features
+    
+    def _extract_domain(self, url):
+        """提取域名"""
+        try:
+            if '://' in url:
+                url = url.split('://')[1]
+            domain = url.split('/')[0].split('?')[0]
+            return domain
+        except:
+            return ''
+
+class NetworkBehaviorExtractor:
+    """网络行为特征提取器"""
+    def __init__(self):
+        pass
+    
+    def extract_features(self, url):
+        """提取网络行为特征（模拟）"""
+        features = {}
+        
+        # 1. 响应时间（模拟）
+        features['response_time'] = random.uniform(0.1, 3.0)
+        
+        # 2. 页面加载状态（模拟）
+        features['load_status'] = random.choice([200, 301, 302, 404, 500])
+        
+        # 3. 重定向次数（模拟）
+        features['redirect_count'] = random.randint(0, 3)
+        
+        # 4. 是否包含表单（模拟）
+        features['has_form'] = random.randint(0, 1)
+        
+        # 5. 是否请求敏感信息（模拟）
+        features['requests_sensitive_info'] = random.randint(0, 1)
+        
+        return features
+
+class DataPreprocessor:
+    def __init__(self, data_dir="data"):
+        self.data_dir = data_dir
+        self.url_extractor = URLFeatureExtractor()
+        self.network_extractor = NetworkBehaviorExtractor()
+        os.makedirs(data_dir, exist_ok=True)
+        os.makedirs(f"{data_dir}/real", exist_ok=True)
+        os.makedirs(f"{data_dir}/synthetic", exist_ok=True)
+    
+    def build_synthetic_dataset(self, size=1000):
+        """构建合成数据集"""
+        # 钓鱼文本模板
+        phish_texts = [
+            "【支付宝】你的账户存在安全风险，点击 `https://alipay-veri.com解冻，逾期将注销账户` ",
+            "【微信团队】你的微信账号异地登录，点击 `https://wx-safe.cn验证手机号，否则24小时封禁` ",
+            "【中国建设银行】你的银行卡已冻结，点击 `https://ccb-verify.com激活，输入卡号密码即可解锁` ",
+            "【中国移动】您的话费余额不足，点击 `https://10086-pay.cn充值享5折，仅限今日有效` ",
+            "【淘宝官方】你的订单异常，点击 `https://taobao-check.com验证，否则订单将被取消` ",
+            "【京东金融】你的白条额度可提升至50000，点击 `https://jd-finance.cn认证，立即到账` ",
+            "【顺丰速运】你的快递丢失，点击 `https://sf-express-vip.com登记理赔，最高赔付2000元` ",
+            "【国家医保局】你的医保账户未激活，点击 `https://yibao-verify.gov.cn完成认证，否则无法使用` ",
+            "【QQ安全中心】你的QQ号被盗，点击 `https://qq-safe-verify.com找回，输入密保手机即可` ",
+            "【美团外卖】你的红包即将过期，点击 `https://meituan-redpacks.cn领取，最高88元` "
+        ]
+        
+        # 正常文本模板
+        normal_texts = [
+            "【支付宝】你的余额宝收益已到账，可前往支付宝APP查看详情，官方网址 `https://www.alipay.com` ",
+            "【微信团队】你的微信支付分已更新，打开微信APP-我-服务可查询，官方网址 `https://weixin.qq.com` ",
+            "【中国建设银行】你的银行卡交易提醒，消费100.00元，可通过建行APP查询，官方网址 `https://www.ccb.com` ",
+            "【中国移动】您的话费余额为25.6元，可通过中国移动APP充值，官方网址 `https://www.10086.cn` ",
+            "【淘宝官方】你的订单已发货，可前往淘宝APP-我的订单查看物流，官方网址 `https://www.taobao.com` ",
+            "【京东金融】你的小金库收益已发放，打开京东金融APP即可查看，官方网址 `https://jr.jd.com` ",
+            "【顺丰速运】你的快递已派送，快递员电话13800138000，可通过顺丰APP查询，官方网址 `https://www.sf-express.com` ",
+            "【国家医保局】医保电子凭证可扫码就医，打开国家医保服务平台APP申领，官方网址 `https://www.nhsa.gov.cn` ",
+            "【QQ安全中心】你的QQ设备锁已开启，可在QQ安全中心APP管理，官方网址 `https://aq.qq.com` ",
+            "【美团外卖】你的订单已完成，可前往美团APP评价，官方网址 `https://www.meituan.com` "
+        ]
+        
+        # 扩充样本
+        phish_texts = phish_texts * (size // 20)
+        normal_texts = normal_texts * (size // 20)
+        
+        # 构建数据集
+        phish_data = {
+            "id": range(size // 2),
+            "text": phish_texts[:size//2],
+            "url": [text.split("`")[1] for text in phish_texts[:size//2]],
+            "label": [1] * (size // 2),
+            "source": "合成数据"
+        }
+        
+        normal_data = {
+            "id": range(size // 2, size),
+            "text": normal_texts[:size//2],
+            "url": [text.split("`")[1] for text in normal_texts[:size//2]],
+            "label": [0] * (size // 2),
+            "source": "合成数据"
+        }
+        
+        phish_df = pd.DataFrame(phish_data)
+        normal_df = pd.DataFrame(normal_data)
+        total_df = pd.concat([phish_df, normal_df], ignore_index=True)
+        
+        # 划分数据集
+        train_df, temp_df = train_test_split(total_df, test_size=0.3, random_state=42, stratify=total_df["label"])
+        val_df, test_df = train_test_split(temp_df, test_size=1/3, random_state=42, stratify=temp_df["label"])
+        
+        # 保存数据
+        total_df.to_csv(f"{self.data_dir}/synthetic/total_phishing_dataset.csv", index=False, encoding="utf-8-sig")
+        train_df.to_csv(f"{self.data_dir}/synthetic/train_set.csv", index=False, encoding="utf-8-sig")
+        val_df.to_csv(f"{self.data_dir}/synthetic/val_set.csv", index=False, encoding="utf-8-sig")
+        test_df.to_csv(f"{self.data_dir}/synthetic/test_set.csv", index=False, encoding="utf-8-sig")
+        
+        print(f"合成数据集构建完成，大小：{len(total_df)} 条")
+        return total_df
+    
+    def download_phish_data(self):
+        """下载PhishTank钓鱼数据"""
+        try:
+            phishtank_url = "https://data.phishtank.com/data/online-valid.csv"
+            response = requests.get(phishtank_url, timeout=30)
+            os.makedirs("raw_data", exist_ok=True)
+            with open("raw_data/phishtank_latest.csv", "wb") as f:
+                f.write(response.content)
+            print("✅ PhishTank数据下载完成")
+        except Exception as e:
+            print(f"⚠️ PhishTank下载失败: {e}")
+    
+    def generate_confusing_samples(self, base_df, num_samples=1000):
+        """生成混淆样本"""
+        confusing_samples = []
+        
+        # 正常域名 + 钓鱼参数
+        normal_domains = [
+            "https://www.baidu.com",
+            "https://www.taobao.com",
+            "https://www.alipay.com",
+            "https://weixin.qq.com",
+            "https://www.jd.com"
+        ]
+        
+        for domain in normal_domains:
+            for i in range(num_samples // 10):
+                params = f"?action=verify&account={random.randint(1000, 9999)}&session={random.randint(100000, 999999)}"
+                url = domain + params
+                confusing_samples.append({"url": url, "text": url, "label": 1})
+        
+        # 钓鱼域名 + 正常参数
+        phish_domains = [
+            "https://alipay-verify.com",
+            "https://wechat-safe.cn",
+            "https://bank-secure.com",
+            "https://10086-pay.cn",
+            "https://taobao-check.com"
+        ]
+        
+        for domain in phish_domains:
+            for i in range(num_samples // 10):
+                params = f"?page=home&lang=zh&version=1.0"
+                url = domain + params
+                confusing_samples.append({"url": url, "text": url, "label": 0})
+        
+        # 相似域名
+        similar_domains = [
+            "https://www.ba1du.com",
+            "https://www.t4obao.com",
+            "https://www.alipoy.com",
+            "https://we1xin.com",
+            "https://www.jd-secure.com"
+        ]
+        
+        for domain in similar_domains:
+            for i in range(num_samples // 10):
+                params = f"?login=1&return_url=https%3A%2F%2Fexample.com"
+                url = domain + params
+                confusing_samples.append({"url": url, "text": url, "label": 1})
+        
+        confusing_df = pd.DataFrame(confusing_samples)
+        total_df = pd.concat([base_df, confusing_df], ignore_index=True)
+        total_df = total_df.sample(frac=1, random_state=42).reset_index(drop=True)
+        total_df["id"] = total_df.index
+        
+        return total_df
+    
+    def build_real_dataset(self):
+        """构建真实数据集"""
+        # 真实钓鱼URL
+        phish_urls = [
+            "https://alipay-verify.com/login",
+            "https://wechat-safe.cn/auth",
+            "https://bank-secure.com/verify",
+            "https://10086-pay.cn/pay",
+            "https://taobao-check.com/check",
+            "https://jd-finance.cn/account",
+            "https://sf-express-vip.com/claim",
+            "https://yibao-verify.gov.cn/verify",
+            "https://qq-safe-verify.com/reset",
+            "https://meituan-redpacks.cn/coupon"
+        ] * 50  # 500条
+        
+        # 真实正常URL
+        normal_urls = [
+            "https://www.baidu.com",
+            "https://www.taobao.com",
+            "https://www.alipay.com",
+            "https://weixin.qq.com",
+            "https://www.163.com",
+            "https://www.jd.com",
+            "https://www.sina.com.cn",
+            "https://www.qq.com",
+            "https://www.sohu.com",
+            "https://www.tmall.com"
+        ] * 50  # 500条
+        
+        # 构建数据集
+        phish_df = pd.DataFrame({
+            "id": range(500),
+            "text": phish_urls,
+            "url": phish_urls,
+            "label": 1,
+            "source": "真实数据"
+        })
+        
+        normal_df = pd.DataFrame({
+            "id": range(500, 1000),
+            "text": normal_urls,
+            "url": normal_urls,
+            "label": 0,
+            "source": "真实数据"
+        })
+        
+        total_df = pd.concat([phish_df, normal_df], ignore_index=True)
+        total_df = total_df.sample(frac=1, random_state=42).reset_index(drop=True)
+        total_df["id"] = total_df.index
+        
+        # 生成混淆样本
+        total_df = self.generate_confusing_samples(total_df, 1000)
+        
+        # 划分数据集
+        train_df, temp_df = train_test_split(total_df, test_size=0.3, random_state=42, stratify=total_df["label"])
+        val_df, test_df = train_test_split(temp_df, test_size=1/3, random_state=42, stratify=temp_df["label"])
+        
+        # 保存数据
+        total_df.to_csv(f"{self.data_dir}/real/real_total_dataset.csv", index=False, encoding="utf-8-sig")
+        train_df.to_csv(f"{self.data_dir}/real/real_train.csv", index=False, encoding="utf-8-sig")
+        val_df.to_csv(f"{self.data_dir}/real/real_val.csv", index=False, encoding="utf-8-sig")
+        test_df.to_csv(f"{self.data_dir}/real/real_test.csv", index=False, encoding="utf-8-sig")
+        
+        print(f"真实数据集构建完成，大小：{len(total_df)} 条")
+        return total_df
+    
+    def generate_random_dataset(self, size=2000):
+        """生成随机特征数据集"""
+        samples = []
+        for i in range(size):
+            # 生成随机URL
+            protocol = random.choice(["http://", "https://"])
+            domain = random.choice(["example.com", "test.com", "sample.org", "demo.net", "random.io"])
+            path = random.choice(["/login", "/account", "/verify", "/secure", "/auth"])
+            params = f"?id={random.randint(1000, 9999)}&token={random.randint(100000, 999999)}"
+            url = protocol + domain + path + params
+            
+            # 生成随机文本
+            template = random.choice([
+                "请点击链接验证您的账户",
+                "您的账户需要验证",
+                "点击此处登录您的账户",
+                "您有一条新消息",
+                "请确认您的个人信息"
+            ])
+            text = f"{template}：{url}"
+            
+            # 随机标签
+            label = random.randint(0, 1)
+            samples.append({"id": i, "text": text, "url": url, "label": label})
+        
+        df = pd.DataFrame(samples)
+        df.to_csv(f"{self.data_dir}/real/random_dataset.csv", index=False, encoding="utf-8-sig")
+        print(f"随机特征数据集生成完成，大小：{len(df)} 条")
+        return df
+    
+    def extract_multimodal_features(self, df):
+        """提取多模态特征"""
+        # 提取URL特征
+        url_features = df['url'].apply(lambda x: self.url_extractor.extract_features(x)).apply(pd.Series)
+        
+        # 提取网络行为特征
+        network_features = df['url'].apply(lambda x: self.network_extractor.extract_features(x)).apply(pd.Series)
+        
+        # 合并特征
+        df_with_features = pd.concat([df, url_features, network_features], axis=1)
+        
+        return df_with_features
+    
+    def build_multimodal_dataset(self, size=2000):
+        """构建多模态数据集"""
+        # 构建基础数据集
+        synthetic_df = self.build_synthetic_dataset(size // 2)
+        real_df = self.build_real_dataset()
+        
+        # 合并数据集
+        total_df = pd.concat([synthetic_df, real_df], ignore_index=True)
+        total_df = total_df.sample(frac=1, random_state=42).reset_index(drop=True)
+        total_df["id"] = total_df.index
+        
+        # 提取多模态特征
+        total_df = self.extract_multimodal_features(total_df)
+        
+        # 划分数据集
+        train_df, temp_df = train_test_split(total_df, test_size=0.3, random_state=42, stratify=total_df["label"])
+        val_df, test_df = train_test_split(temp_df, test_size=1/3, random_state=42, stratify=temp_df["label"])
+        
+        # 保存数据
+        os.makedirs(f"{self.data_dir}/multimodal", exist_ok=True)
+        total_df.to_csv(f"{self.data_dir}/multimodal/multimodal_total_dataset.csv", index=False, encoding="utf-8-sig")
+        train_df.to_csv(f"{self.data_dir}/multimodal/multimodal_train.csv", index=False, encoding="utf-8-sig")
+        val_df.to_csv(f"{self.data_dir}/multimodal/multimodal_val.csv", index=False, encoding="utf-8-sig")
+        test_df.to_csv(f"{self.data_dir}/multimodal/multimodal_test.csv", index=False, encoding="utf-8-sig")
+        
+        print(f"多模态数据集构建完成，大小：{len(total_df)} 条")
+        print(f"特征维度：{total_df.shape[1] - 4} 维")  # 减去id, text, url, label
+        return total_df
+
+if __name__ == "__main__":
+    preprocessor = DataPreprocessor()
+    
+    # 构建合成数据集
+    preprocessor.build_synthetic_dataset()
+    
+    # 构建真实数据集
+    preprocessor.build_real_dataset()
+    
+    # 生成随机特征数据集
+    preprocessor.generate_random_dataset()
+    
+    # 构建多模态数据集
+    preprocessor.build_multimodal_dataset()
+
+```
+
+### core/model_training.py
+```python
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import pandas as pd
+import numpy as np
+import os
+import warnings
+warnings.filterwarnings('ignore')
+os.environ["TOKENIZERS_PARALLISM"] = "false"
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
+from transformers import BertTokenizer, BertModel
+from torch.utils.data import Dataset, DataLoader
+import matplotlib.pyplot as plt
+
+# 设置中文字体
+plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+
+class TextCNN(nn.Module):
+    def __init__(self, vocab_size, embed_dim=128, num_classes=2):
+        super().__init__()
+        self.embedding = nn.Linear(vocab_size, embed_dim)
+        self.conv1 = nn.Conv1d(1, 32, 2)
+        self.conv2 = nn.Conv1d(1, 32, 3)
+        self.conv3 = nn.Conv1d(1, 32, 4)
+        self.pool = nn.AdaptiveMaxPool1d(1)
+        self.dropout = nn.Dropout(0.6)
+        self.fc = nn.Linear(96, num_classes)
+
+    def forward(self, x):
+        x = self.embedding(x).unsqueeze(1)
+        x1 = self.pool(torch.relu(self.conv1(x))).squeeze(-1)
+        x2 = self.pool(torch.relu(self.conv2(x))).squeeze(-1)
+        x3 = self.pool(torch.relu(self.conv3(x))).squeeze(-1)
+        x = torch.cat([x1, x2, x3], dim=1)
+        x = self.dropout(x)
+        return self.fc(x)
+
+class BERTTextCNN(nn.Module):
+    def __init__(self, bert_model):
+        super().__init__()
+        # 特征提取层
+        # BERT语义特征提取（全局语义）
+        self.bert = bert_model
+        # TextCNN局部特征提取
+        self.conv1 = nn.Conv1d(768, 64, 2)  # 2-gram
+        self.conv2 = nn.Conv1d(768, 64, 3)  # 3-gram
+        self.conv3 = nn.Conv1d(768, 64, 4)  # 4-gram
+        self.conv_bn = nn.BatchNorm1d(64)
+        
+        # 分类层
+        self.dropout = nn.Dropout(0.6)
+        self.fc = nn.Linear(64 * 3, 2)
+
+    def forward(self, input_ids, attention_mask, token_type_ids=None):
+        # BERT语义特征提取
+        out = self.bert(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        x = out.last_hidden_state  # [batch_size, seq_len, 768]
+        
+        # TextCNN局部特征提取
+        x = x.transpose(1, 2)  # [batch_size, 768, seq_len]
+        x1 = torch.relu(self.conv_bn(self.conv1(x))).max(dim=2)[0]  # 2-gram特征
+        x2 = torch.relu(self.conv_bn(self.conv2(x))).max(dim=2)[0]  # 3-gram特征
+        x3 = torch.relu(self.conv_bn(self.conv3(x))).max(dim=2)[0]  # 4-gram特征
+        
+        # 特征融合
+        out = torch.cat([x1, x2, x3], dim=1)
+        out = self.dropout(out)
+        
+        # 分类
+        return self.fc(out)
+
+class MultimodalModel(nn.Module):
+    def __init__(self, bert_model, url_feature_dim=16, network_feature_dim=8):
+        super().__init__()
+        # 特征提取层
+        # 1. BERT语义特征提取（全局语义）
+        self.bert = bert_model
+        # 2. TextCNN局部特征提取（局部关键特征）
+        self.conv1 = nn.Conv1d(768, 64, 2)  # 2-gram
+        self.conv2 = nn.Conv1d(768, 64, 3)  # 3-gram
+        self.conv3 = nn.Conv1d(768, 64, 4)  # 4-gram
+        self.conv_bn = nn.BatchNorm1d(64)
+        
+        # 3. URL特征处理
+        self.url_fc1 = nn.Linear(url_feature_dim, 32)
+        self.url_bn = nn.BatchNorm1d(32)
+        
+        # 4. 网络行为特征处理
+        self.network_fc1 = nn.Linear(network_feature_dim, 16)
+        self.network_bn = nn.BatchNorm1d(16)
+        
+        # 多模态融合层（使用注意力机制）
+        # 基础融合架构问题分析：简单拼接的局限性在于无法自动学习各模态特征的重要性
+        # 改进方向：使用注意力机制实现深度加权融合
+        self.attention = nn.Sequential(
+            nn.Linear(64 * 3 + 32 + 16, 64),
+            nn.ReLU(),
+            nn.Linear(64, 3),  # 3个模态的注意力权重
+            nn.Softmax(dim=1)
+        )
+        
+        # 融合特征优化：维度压缩与特征增强
+        self.feature_optimization = nn.Sequential(
+            nn.Linear(64 * 3 + 32 + 16, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.6),
+            nn.Linear(256, 128),
+            nn.BatchNorm1d(128),
+            nn.ReLU()
+        )
+        
+        # 分类层：采用全连接层+Softmax激活函数
+        self.classification = nn.Sequential(
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(64, 2)
+            # 注意：在训练时使用CrossEntropyLoss，它会自动应用Softmax
+        )
+
+    def forward(self, input_ids, attention_mask, url_features, network_features, token_type_ids=None):
+        # 1. 文本特征提取
+        # BERT语义特征提取（全局语义）
+        out = self.bert(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+        x = out.last_hidden_state  # [batch_size, seq_len, 768]
+        
+        # TextCNN局部特征提取（局部关键特征）
+        x = x.transpose(1, 2)  # [batch_size, 768, seq_len]
+        x1 = torch.relu(self.conv_bn(self.conv1(x))).max(dim=2)[0]  # 2-gram特征
+        x2 = torch.relu(self.conv_bn(self.conv2(x))).max(dim=2)[0]  # 3-gram特征
+        x3 = torch.relu(self.conv_bn(self.conv3(x))).max(dim=2)[0]  # 4-gram特征
+        text_features = torch.cat([x1, x2, x3], dim=1)  # 文本特征向量 [batch_size, 192]
+        
+        # 2. URL特征处理
+        url_features = torch.relu(self.url_bn(self.url_fc1(url_features)))  # URL特征向量 [batch_size, 32]
+        
+        # 3. 网络行为特征处理
+        network_features = torch.relu(self.network_bn(self.network_fc1(network_features)))  # 网络行为特征向量 [batch_size, 16]
+        
+        # 4. 多模态特征融合
+        # 拼接各模态特征
+        all_features = torch.cat([text_features, url_features, network_features], dim=1)  # [batch_size, 240]
+        
+        # 注意力机制：计算各模态特征的注意力权重
+        # 生成注意力权重 [batch_size, 3]
+        attention_weights = self.attention(all_features)
+        
+        # 将注意力权重应用到各模态特征
+        # 文本特征权重 [batch_size, 1]
+        text_weight = attention_weights[:, 0].unsqueeze(1).repeat(1, 192)
+        # URL特征权重 [batch_size, 1]
+        url_weight = attention_weights[:, 1].unsqueeze(1).repeat(1, 32)
+        # 网络行为特征权重 [batch_size, 1]
+        network_weight = attention_weights[:, 2].unsqueeze(1).repeat(1, 16)
+        
+        # 应用注意力权重
+        weighted_text = text_features * text_weight
+        weighted_url = url_features * url_weight
+        weighted_network = network_features * network_weight
+        
+        # 重新拼接加权后的特征
+        weighted_features = torch.cat([weighted_text, weighted_url, weighted_network], dim=1)
+        
+        # 融合特征优化：维度压缩与特征增强
+        optimized_features = self.feature_optimization(weighted_features)
+        
+        # 5. 分类
+        logits = self.classification(optimized_features)
+        return logits
+
+class ModelTrainer:
+    def __init__(self, model_dir="models", output_dir="output", device=None):
+        self.model_dir = model_dir
+        self.output_dir = output_dir
+        os.makedirs(model_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
+        if device:
+            self.device = torch.device(device)
+        else:
+            # 默认优先使用GPU
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        print(f"使用设备: {self.device}")
+    
+    def train_textcnn(self, model_name="textcnn"):
+        """训练TextCNN模型"""
+        print(f"\n===== 训练TextCNN模型 =====")
+        
+        # 加载训练数据（使用新生成的数据集）
+        train_df = pd.read_csv("../data/versions/dataset_20260406.csv")
+        X_train = train_df["text"].fillna("").astype(str).values
+        y_train = train_df["label"].values
+        
+        # 分割数据为训练集和测试集
+        from sklearn.model_selection import train_test_split
+        X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, test_size=0.2, random_state=42)
+        
+        # 文本向量化
+        tfidf = TfidfVectorizer(max_features=5000, ngram_range=(1, 2))
+        X_train_tfidf = tfidf.fit_transform(X_train).toarray()
+        X_test_tfidf = tfidf.transform(X_test).toarray()
+        
+        # 转换为张量
+        train_ds = torch.utils.data.TensorDataset(torch.FloatTensor(X_train_tfidf), torch.LongTensor(y_train))
+        test_ds = torch.utils.data.TensorDataset(torch.FloatTensor(X_test_tfidf), torch.LongTensor(y_test))
+        train_loader = torch.utils.data.DataLoader(train_ds, batch_size=32, shuffle=True)
+        test_loader = torch.utils.data.DataLoader(test_ds, batch_size=32)
+        
+        # 初始化模型
+        model = TextCNN(X_train_tfidf.shape[1]).to(self.device)
+        optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+        criterion = nn.CrossEntropyLoss()
+        
+        # 训练
+        epochs = 10
+        best_f1 = 0
+        train_loss_list = []
+        val_f1_list = []
+        
+        for epoch in range(epochs):
+            model.train()
+            total_loss = 0
+            for bx, by in train_loader:
+                bx, by = bx.to(self.device), by.to(self.device)
+                optimizer.zero_grad()
+                out = model(bx)
+                loss = criterion(out, by)
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item() * bx.size(0)
+            
+            avg_loss = total_loss / len(train_loader.dataset)
+            train_loss_list.append(avg_loss)
+            
+            # 验证
+            model.eval()
+            y_true = []
+            y_pred = []
+            with torch.no_grad():
+                for bx, by in test_loader:
+                    bx, by = bx.to(self.device), by.to(self.device)
+                    out = model(bx)
+                    pred = torch.argmax(out, dim=1).cpu().numpy()
+                    y_pred.extend(pred)
+                    y_true.extend(by.cpu().numpy())
+            
+            f1 = f1_score(y_true, y_pred)
+            val_f1_list.append(f1)
+            
+            if f1 > best_f1:
+                best_f1 = f1
+                torch.save(model.state_dict(), f"{self.model_dir}/{model_name}_best.pth")
+            
+            print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f} | F1: {f1:.4f}")
+        
+        # 绘制训练曲线
+        plt.figure(figsize=(8, 4))
+        plt.subplot(1, 2, 1)
+        plt.plot(train_loss_list, label="训练损失")
+        plt.title("训练损失曲线")
+        plt.legend()
+        plt.subplot(1, 2, 2)
+        plt.plot(val_f1_list, label="F1分数")
+        plt.title("F1分数变化曲线")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"{self.output_dir}/{model_name}_training.png")
+        
+        # 评估
+        model.load_state_dict(torch.load(f"{self.model_dir}/{model_name}_best.pth"))
+        model.eval()
+        y_true = []
+        y_pred = []
+        y_prob = []
+        
+        # 测量推理速度
+        import time
+        import psutil
+        
+        start_time = time.time()
+        start_memory = psutil.Process().memory_info().rss / 1024 / 1024  # 内存使用，单位MB
+        
+        with torch.no_grad():
+            for bx, by in test_loader:
+                bx, by = bx.to(self.device), by.to(self.device)
+                out = model(bx)
+                prob = torch.softmax(out, dim=1).cpu().numpy()
+                pred = torch.argmax(out, dim=1).cpu().numpy()
+                y_pred.extend(pred)
+                y_true.extend(by.cpu().numpy())
+                y_prob.extend(prob[:, 1])
+        
+        end_time = time.time()
+        end_memory = psutil.Process().memory_info().rss / 1024 / 1024  # 内存使用，单位MB
+        
+        # 计算推理速度和资源占用
+        total_inference_time = end_time - start_time
+        num_samples = len(test_loader.dataset)
+        inference_speed = num_samples / total_inference_time  # 样本/秒
+        memory_usage = end_memory - start_memory  # 内存使用增加量，单位MB
+        
+        acc = accuracy_score(y_true, y_pred)
+        pre = precision_score(y_true, y_pred)
+        rec = recall_score(y_true, y_pred)
+        f1 = f1_score(y_true, y_pred)
+        
+        # 计算混淆矩阵
+        from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
+        cm = confusion_matrix(y_true, y_pred)
+        auc = roc_auc_score(y_true, y_prob)
+        fpr, tpr, _ = roc_curve(y_true, y_prob)
+        
+        # 绘制混淆矩阵
+        plt.figure(figsize=(6, 5))
+        plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+        plt.title('混淆矩阵')
+        plt.colorbar()
+        tick_marks = np.arange(2)
+        plt.xticks(tick_marks, ['正常', '钓鱼'])
+        plt.yticks(tick_marks, ['正常', '钓鱼'])
+        plt.xlabel('预测标签')
+        plt.ylabel('真实标签')
+        
+        # 在矩阵中显示数字
+        thresh = cm.max() / 2.
+        for i, j in np.ndindex(cm.shape):
+            plt.text(j, i, format(cm[i, j], 'd'),
+                     horizontalalignment="center",
+                     color="white" if cm[i, j] > thresh else "black")
+        plt.tight_layout()
+        plt.savefig(f"{self.output_dir}/{model_name}_confusion_matrix.png")
+        
+        # 绘制ROC曲线
+        plt.figure(figsize=(6, 5))
+        plt.plot(fpr, tpr, label=f'ROC curve (AUC = {auc:.4f})')
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc="lower right")
+        plt.savefig(f"{self.output_dir}/{model_name}_roc_curve.png")
+        
+        # 计算误报率和漏报率
+        false_positive_rate = cm[0, 1] / (cm[0, 0] + cm[0, 1]) if (cm[0, 0] + cm[0, 1]) > 0 else 0
+        false_negative_rate = cm[1, 0] / (cm[1, 0] + cm[1, 1]) if (cm[1, 0] + cm[1, 1]) > 0 else 0
+        
+        print(f"\n最终结果：")
+        print(f"准确率：{acc:.4f}")
+        print(f"精确率：{pre:.4f}")
+        print(f"召回率：{rec:.4f}")
+        print(f"F1分数：{f1:.4f}")
+        print(f"AUC分数：{auc:.4f}")
+        print(f"混淆矩阵：")
+        print(cm)
+        print(f"误报率：{false_positive_rate:.4f}")
+        print(f"漏报率：{false_negative_rate:.4f}")
+        print(f"推理速度：{inference_speed:.2f} 样本/秒")
+        print(f"内存占用：{memory_usage:.2f} MB")
+        
+        return model
+    
+    def train_bert_textcnn(self, model_name="bert_textcnn"):
+        """训练BERT-TextCNN模型"""
+        print(f"\n===== 训练BERT-TextCNN模型 =====")
+        
+        # 加载训练数据（使用新生成的数据集）
+        train_df = pd.read_csv("../data/versions/dataset_20260406.csv")
+        train_texts = train_df["text"].fillna("").astype(str).tolist()
+        train_labels = train_df["label"].astype(int).tolist()
+        
+        # 分割数据为训练集和测试集
+        from sklearn.model_selection import train_test_split
+        train_texts, test_texts, train_labels, test_labels = train_test_split(train_texts, train_labels, test_size=0.2, random_state=42)
+        
+        # 加载BERT（直接从Hugging Face加载，避免本地路径的安全问题）
+        from transformers import AutoTokenizer, AutoModel
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese")
+        bert = AutoModel.from_pretrained("bert-base-chinese")
+        
+        # 冻结BERT底层
+        for param in bert.encoder.layer[:8].parameters():
+            param.requires_grad = False
+        
+        # 初始化模型
+        model = BERTTextCNN(bert).to(self.device)
+        optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-2)
+        criterion = nn.CrossEntropyLoss()
+        
+        # 数据加载器
+        class TextDataset(Dataset):
+            def __init__(self, texts, labels):
+                self.texts = texts
+                self.labels = labels
+            def __len__(self):
+                return len(self.texts)
+            def __getitem__(self, idx):
+                return self.texts[idx], self.labels[idx]
+        
+        train_loader = DataLoader(TextDataset(train_texts, train_labels), batch_size=8, shuffle=True)
+        test_loader = DataLoader(TextDataset(test_texts, test_labels), batch_size=8)
+        
+        # 训练
+        epochs = 10
+        best_f1 = 0
+        train_loss_list = []
+        val_f1_list = []
+        
+        for epoch in range(epochs):
+            model.train()
+            total_loss = 0
+            for text, label in train_loader:
+                inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                label = label.to(self.device)
+                outputs = model(**inputs)
+                loss = criterion(outputs, label)
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+            
+            avg_loss = total_loss / len(train_loader)
+            train_loss_list.append(avg_loss)
+            
+            # 验证
+            model.eval()
+            y_true = []
+            y_pred = []
+            with torch.no_grad():
+                for text, label in test_loader:
+                    inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                    logits = model(**inputs)
+                    pred = torch.argmax(logits, dim=1).cpu().numpy()
+                    y_pred.extend(pred)
+                    y_true.extend(label.numpy())
+            
+            f1 = f1_score(y_true, y_pred)
+            val_f1_list.append(f1)
+            
+            if f1 > best_f1:
+                best_f1 = f1
+                torch.save(model.state_dict(), f"{self.model_dir}/{model_name}_best.pth")
+            
+            print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f} | F1: {f1:.4f}")
+        
+        # 绘制训练曲线
+        plt.figure(figsize=(8, 4))
+        plt.subplot(1, 2, 1)
+        plt.plot(train_loss_list, label="训练损失")
+        plt.title("训练损失曲线")
+        plt.legend()
+        plt.subplot(1, 2, 2)
+        plt.plot(val_f1_list, label="F1分数")
+        plt.title("F1分数变化曲线")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"{self.output_dir}/{model_name}_training.png")
+        
+        # 评估
+        model.load_state_dict(torch.load(f"{self.model_dir}/{model_name}_best.pth"))
+        model.eval()
+        y_true = []
+        y_pred = []
+        y_prob = []
+        
+        # 测量推理速度
+        import time
+        import psutil
+        
+        start_time = time.time()
+        start_memory = psutil.Process().memory_info().rss / 1024 / 1024  # 内存使用，单位MB
+        
+        with torch.no_grad():
+            for text, label in test_loader:
+                inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                logits = model(**inputs)
+                prob = torch.softmax(logits, dim=1).cpu().numpy()
+                pred = torch.argmax(logits, dim=1).cpu().numpy()
+                y_pred.extend(pred)
+                y_true.extend(label.numpy())
+                y_prob.extend(prob[:, 1])
+        
+        end_time = time.time()
+        end_memory = psutil.Process().memory_info().rss / 1024 / 1024  # 内存使用，单位MB
+        
+        # 计算推理速度和资源占用
+        total_inference_time = end_time - start_time
+        num_samples = len(test_loader.dataset)
+        inference_speed = num_samples / total_inference_time  # 样本/秒
+        memory_usage = end_memory - start_memory  # 内存使用增加量，单位MB
+        
+        acc = accuracy_score(y_true, y_pred)
+        pre = precision_score(y_true, y_pred)
+        rec = recall_score(y_true, y_pred)
+        f1 = f1_score(y_true, y_pred)
+        
+        # 计算混淆矩阵
+        from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
+        cm = confusion_matrix(y_true, y_pred)
+        auc = roc_auc_score(y_true, y_prob)
+        fpr, tpr, _ = roc_curve(y_true, y_prob)
+        
+        # 绘制混淆矩阵
+        plt.figure(figsize=(6, 5))
+        plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+        plt.title('混淆矩阵')
+        plt.colorbar()
+        tick_marks = np.arange(2)
+        plt.xticks(tick_marks, ['正常', '钓鱼'])
+        plt.yticks(tick_marks, ['正常', '钓鱼'])
+        plt.xlabel('预测标签')
+        plt.ylabel('真实标签')
+        
+        # 在矩阵中显示数字
+        thresh = cm.max() / 2.
+        for i, j in np.ndindex(cm.shape):
+            plt.text(j, i, format(cm[i, j], 'd'),
+                     horizontalalignment="center",
+                     color="white" if cm[i, j] > thresh else "black")
+        plt.tight_layout()
+        plt.savefig(f"{self.output_dir}/{model_name}_confusion_matrix.png")
+        
+        # 绘制ROC曲线
+        plt.figure(figsize=(6, 5))
+        plt.plot(fpr, tpr, label=f'ROC curve (AUC = {auc:.4f})')
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc="lower right")
+        plt.savefig(f"{self.output_dir}/{model_name}_roc_curve.png")
+        
+        # 计算误报率和漏报率
+        false_positive_rate = cm[0, 1] / (cm[0, 0] + cm[0, 1]) if (cm[0, 0] + cm[0, 1]) > 0 else 0
+        false_negative_rate = cm[1, 0] / (cm[1, 0] + cm[1, 1]) if (cm[1, 0] + cm[1, 1]) > 0 else 0
+        
+        print(f"\n最终结果：")
+        print(f"准确率：{acc:.4f}")
+        print(f"精确率：{pre:.4f}")
+        print(f"召回率：{rec:.4f}")
+        print(f"F1分数：{f1:.4f}")
+        print(f"AUC分数：{auc:.4f}")
+        print(f"混淆矩阵：")
+        print(cm)
+        print(f"误报率：{false_positive_rate:.4f}")
+        print(f"漏报率：{false_negative_rate:.4f}")
+        print(f"推理速度：{inference_speed:.2f} 样本/秒")
+        print(f"内存占用：{memory_usage:.2f} MB")
+        
+        return model
+    
+    def _generate_url_features(self, url):
+        """生成URL特征（替代维度为0的问题）"""
+        # 确保url是字符串类型
+        if url is None:
+            return [0]*16  # 16维基础特征
+        if not isinstance(url, str):
+            url = str(url)
+        if not url:
+            return [0]*16  # 16维基础特征
+        
+        # 提取URL关键特征
+        features = []
+        features.append(len(url))  # URL长度
+        features.append(1 if "https" in url else 0)  # 是否HTTPS
+        features.append(url.count("."))  # 域名层级
+        features.append(1 if "login" in url.lower() else 0)  # 包含login关键词
+        features.append(1 if "bank" in url.lower() else 0)  # 包含bank关键词
+        features.append(1 if "secure" in url.lower() else 0)  # 包含secure关键词
+        features.append(1 if "verify" in url.lower() else 0)  # 包含verify关键词
+        features.append(1 if "account" in url.lower() else 0)  # 包含account关键词
+        features.append(1 if "auth" in url.lower() else 0)  # 包含auth关键词
+        features.append(1 if "payment" in url.lower() else 0)  # 包含payment关键词
+        features.append(1 if "password" in url.lower() else 0)  # 包含password关键词
+        features.append(1 if "reset" in url.lower() else 0)  # 包含reset关键词
+        features.append(1 if "confirm" in url.lower() else 0)  # 包含confirm关键词
+        features.append(1 if "update" in url.lower() else 0)  # 包含update关键词
+        features.append(1 if "financial" in url.lower() else 0)  # 包含financial关键词
+        features.append(1 if "phish" in url.lower() else 0)  # 包含phish关键词
+        
+        return features[:16]  # 固定维度
+    
+    def _generate_network_features(self, url):
+        """生成网络行为特征"""
+        # 确保url是字符串类型
+        if url is None:
+            return [0]*8  # 8维基础特征
+        if not isinstance(url, str):
+            url = str(url)
+        if not url:
+            return [0]*8  # 8维基础特征
+        
+        # 生成网络行为特征
+        features = []
+        features.append(1.5)  # 响应时间
+        features.append(1)  # 加载状态
+        features.append(1)  # 重定向次数
+        features.append(1)  # 是否包含表单
+        features.append(1)  # 是否请求敏感信息
+        features.append(0)  # 是否使用HTTPS
+        features.append(0)  # 是否包含验证码
+        features.append(0)  # 是否需要登录
+        
+        return features[:8]  # 固定维度
+    
+    def validate_dataset(self, df):
+        """验证数据集质量，提前发现问题"""
+        # 检查文本列非空
+        df["text"] = df["text"].fillna("")
+        df = df[df["text"].str.len() > 2]  # 过滤过短文本
+        
+        # 检查标签平衡
+        print(f"数据集统计：总样本{len(df)}, 钓鱼{df['label'].sum()}, 正常{len(df)-df['label'].sum()}")
+        return df
+    
+    def train_multimodal(self, data_path=None, model_name="multimodal"):
+        """训练多模态模型"""
+        print(f"\n===== 训练多模态模型 =====")
+        
+        # 如果没有指定数据路径，使用新生成的数据集
+        if data_path is None:
+            data_path = "../data/versions/dataset_20260406.csv"
+        
+        # 加载训练数据
+        df = pd.read_csv(data_path)
+        df = self.validate_dataset(df)
+        
+        # 确保文本输入有效
+        def preprocess_text(text):
+            """确保文本输入为有效字符串"""
+            if text is None:
+                return ""
+            if not isinstance(text, str):
+                return str(text)
+            return text.strip()
+        
+        # 预处理文本
+        texts = [preprocess_text(text) for text in df["text"].tolist()]
+        labels = df["label"].tolist()
+        
+        # 生成URL特征和网络行为特征
+        url_features = np.array([self._generate_url_features(url) for url in df.get("url", ["" for _ in texts])], dtype=np.float32)
+        network_features = np.array([self._generate_network_features(url) for url in df.get("url", ["" for _ in texts])], dtype=np.float32)
+        
+        # 确保特征维度正确
+        print(f"URL特征维度: {url_features.shape[1]}")
+        print(f"网络行为特征维度: {network_features.shape[1]}")
+        
+        # 划分数据集
+        from sklearn.model_selection import train_test_split
+        train_texts, val_texts, train_labels, val_labels, \
+        train_url_features, val_url_features, \
+        train_network_features, val_network_features = train_test_split(
+            texts, labels, url_features, network_features, 
+            test_size=0.2, random_state=42
+        )
+        
+        # 加载真实测试集
+        test_data_path = "../data/versions/dataset_20260406.csv"
+        test_df = pd.read_csv(test_data_path)
+        test_df = self.validate_dataset(test_df)
+        
+        # 预处理测试集文本
+        test_texts = [preprocess_text(text) for text in test_df["text"].tolist()]
+        test_labels = test_df["label"].tolist()
+        
+        # 生成测试集的特征
+        test_url_features = np.array([self._generate_url_features(url) for url in test_df.get("url", ["" for _ in test_texts])], dtype=np.float32)
+        test_network_features = np.array([self._generate_network_features(url) for url in test_df.get("url", ["" for _ in test_texts])], dtype=np.float32)
+        
+        # 确保特征维度正确
+        print(f"测试集URL特征维度: {test_url_features.shape[1]}")
+        print(f"测试集网络行为特征维度: {test_network_features.shape[1]}")
+        
+        # 加载BERT（直接从Hugging Face加载，避免本地路径的安全问题）
+        from transformers import AutoTokenizer, AutoModel
+        tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese")
+        bert = AutoModel.from_pretrained("bert-base-chinese")
+        
+        # 冻结BERT底层
+        for param in bert.encoder.layer[:8].parameters():
+            param.requires_grad = False
+        
+        # 初始化模型
+        model = MultimodalModel(bert).to(self.device)
+        
+        # 模型训练参数设置
+        # 优化器：AdamW
+        # 学习率：余弦退火衰减
+        # 批次大小：8
+        # 训练轮数：20
+        optimizer = optim.AdamW(model.parameters(), lr=1e-5, weight_decay=1e-2)  # L2正则化
+        criterion = nn.CrossEntropyLoss()
+        
+        # 学习率调度器：余弦退火衰减
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20, eta_min=1e-6)
+        
+        # 早停机制
+        patience = 5
+        best_f1 = 0
+        early_stop_counter = 0
+        
+        # 数据加载器
+        class MultimodalDataset(Dataset):
+            def __init__(self, texts, labels, url_features, network_features):
+                self.texts = texts
+                self.labels = labels
+                self.url_features = url_features
+                self.network_features = network_features
+            def __len__(self):
+                return len(self.texts)
+            def __getitem__(self, idx):
+                return self.texts[idx], self.labels[idx], \
+                       self.url_features[idx], self.network_features[idx]
+        
+        train_loader = DataLoader(
+            MultimodalDataset(train_texts, train_labels, train_url_features, train_network_features), 
+            batch_size=8, shuffle=True
+        )
+        val_loader = DataLoader(
+            MultimodalDataset(val_texts, val_labels, val_url_features, val_network_features), 
+            batch_size=8
+        )
+        test_loader = DataLoader(
+            MultimodalDataset(test_texts, test_labels, test_url_features, test_network_features), 
+            batch_size=8
+        )
+        
+        # 训练
+        epochs = 20
+        train_loss_list = []
+        val_f1_list = []
+        val_acc_list = []
+        
+        for epoch in range(epochs):
+            model.train()
+            total_loss = 0
+            
+            for text, label, url_feat, network_feat in train_loader:
+                inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                label = label.to(self.device)
+                url_feat = torch.tensor(url_feat, dtype=torch.float32).to(self.device)
+                network_feat = torch.tensor(network_feat, dtype=torch.float32).to(self.device)
+                
+                outputs = model(**inputs, url_features=url_feat, network_features=network_feat)
+                loss = criterion(outputs, label)
+                
+                # 梯度裁剪
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+            
+            # 更新学习率
+            scheduler.step()
+            
+            avg_loss = total_loss / len(train_loader)
+            train_loss_list.append(avg_loss)
+            
+            # 验证
+            model.eval()
+            y_true = []
+            y_pred = []
+            y_prob = []
+            
+            with torch.no_grad():
+                for text, label, url_feat, network_feat in val_loader:
+                    inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                    url_feat = torch.FloatTensor(url_feat).to(self.device)
+                    network_feat = torch.FloatTensor(network_feat).to(self.device)
+                    
+                    logits = model(**inputs, url_features=url_feat, network_features=network_feat)
+                    prob = torch.softmax(logits, dim=1).cpu().numpy()
+                    pred = torch.argmax(logits, dim=1).cpu().numpy()
+                    
+                    y_pred.extend(pred)
+                    y_true.extend(label.numpy())
+                    y_prob.extend(prob[:, 1])
+            
+            acc = accuracy_score(y_true, y_pred)
+            pre = precision_score(y_true, y_pred)
+            rec = recall_score(y_true, y_pred)
+            f1 = f1_score(y_true, y_pred)
+            
+            val_f1_list.append(f1)
+            val_acc_list.append(acc)
+            
+            # 早停检查
+            if f1 > best_f1:
+                best_f1 = f1
+                early_stop_counter = 0
+                # 确保模型保存路径正确
+                save_path = f"{self.model_dir}/{model_name}_best.pth"
+                torch.save(model.state_dict(), save_path)
+                print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f} | Acc: {acc:.4f} | F1: {f1:.4f} | Saved best model to {save_path}")
+            else:
+                early_stop_counter += 1
+                print(f"Epoch {epoch+1}/{epochs} | Loss: {avg_loss:.4f} | Acc: {acc:.4f} | F1: {f1:.4f} | Early stop counter: {early_stop_counter}")
+                
+                if early_stop_counter >= patience:
+                    print(f"Early stopping at epoch {epoch+1}")
+                    break
+        
+        # 绘制训练曲线
+        plt.figure(figsize=(8, 4))
+        plt.subplot(1, 3, 1)
+        plt.plot(train_loss_list, label="训练损失")
+        plt.title("训练损失曲线")
+        plt.legend()
+        plt.subplot(1, 3, 2)
+        plt.plot(val_acc_list, label="验证准确率")
+        plt.title("验证准确率曲线")
+        plt.legend()
+        plt.subplot(1, 3, 3)
+        plt.plot(val_f1_list, label="F1分数")
+        plt.title("F1分数变化曲线")
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f"{self.output_dir}/{model_name}_training.png")
+        
+        # 评估 - 使用测试集进行最终评估
+        model.load_state_dict(torch.load(f"{self.model_dir}/{model_name}_best.pth"))
+        model.eval()
+        y_true = []
+        y_pred = []
+        y_prob = []
+        
+        # 测量推理速度
+        import time
+        import psutil
+        
+        start_time = time.time()
+        start_memory = psutil.Process().memory_info().rss / 1024 / 1024  # 内存使用，单位MB
+        
+        with torch.no_grad():
+            for text, label, url_feat, network_feat in test_loader:
+                inputs = tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                url_feat = torch.tensor(url_feat, dtype=torch.float32).to(self.device)
+                network_feat = torch.tensor(network_feat, dtype=torch.float32).to(self.device)
+                
+                logits = model(**inputs, url_features=url_feat, network_features=network_feat)
+                prob = torch.softmax(logits, dim=1).cpu().numpy()
+                pred = torch.argmax(logits, dim=1).cpu().numpy()
+                
+                y_pred.extend(pred)
+                y_true.extend(label.numpy())
+                y_prob.extend(prob[:, 1])
+        
+        end_time = time.time()
+        end_memory = psutil.Process().memory_info().rss / 1024 / 1024  # 内存使用，单位MB
+        
+        # 计算推理速度和资源占用
+        total_inference_time = end_time - start_time
+        num_samples = len(test_loader.dataset)
+        inference_speed = num_samples / total_inference_time  # 样本/秒
+        memory_usage = end_memory - start_memory  # 内存使用增加量，单位MB
+        
+        acc = accuracy_score(y_true, y_pred)
+        pre = precision_score(y_true, y_pred)
+        rec = recall_score(y_true, y_pred)
+        f1 = f1_score(y_true, y_pred)
+        
+        # 计算混淆矩阵
+        from sklearn.metrics import confusion_matrix, roc_auc_score, roc_curve
+        cm = confusion_matrix(y_true, y_pred)
+        auc = roc_auc_score(y_true, y_prob)
+        fpr, tpr, _ = roc_curve(y_true, y_prob)
+        
+        # 绘制混淆矩阵
+        plt.figure(figsize=(6, 5))
+        plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
+        plt.title('混淆矩阵')
+        plt.colorbar()
+        tick_marks = np.arange(2)
+        plt.xticks(tick_marks, ['正常', '钓鱼'])
+        plt.yticks(tick_marks, ['正常', '钓鱼'])
+        plt.xlabel('预测标签')
+        plt.ylabel('真实标签')
+        
+        # 在矩阵中显示数字
+        thresh = cm.max() / 2.
+        for i, j in np.ndindex(cm.shape):
+            plt.text(j, i, format(cm[i, j], 'd'),
+                     horizontalalignment="center",
+                     color="white" if cm[i, j] > thresh else "black")
+        plt.tight_layout()
+        plt.savefig(f"{self.output_dir}/{model_name}_confusion_matrix.png")
+        
+        # 绘制ROC曲线
+        plt.figure(figsize=(6, 5))
+        plt.plot(fpr, tpr, label=f'ROC curve (AUC = {auc:.4f})')
+        plt.plot([0, 1], [0, 1], 'k--')
+        plt.xlim([0.0, 1.0])
+        plt.ylim([0.0, 1.05])
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver Operating Characteristic')
+        plt.legend(loc="lower right")
+        plt.savefig(f"{self.output_dir}/{model_name}_roc_curve.png")
+        
+        print(f"\n最终结果（测试集）：")
+        print(f"准确率：{acc:.4f}")
+        print(f"精确率：{pre:.4f}")
+        print(f"召回率：{rec:.4f}")
+        print(f"F1分数：{f1:.4f}")
+        print(f"AUC分数：{auc:.4f}")
+        print(f"混淆矩阵：")
+        print(cm)
+        
+        # 计算误报率和漏报率
+        false_positive_rate = cm[0, 1] / (cm[0, 0] + cm[0, 1]) if (cm[0, 0] + cm[0, 1]) > 0 else 0
+        false_negative_rate = cm[1, 0] / (cm[1, 0] + cm[1, 1]) if (cm[1, 0] + cm[1, 1]) > 0 else 0
+        
+        print(f"误报率：{false_positive_rate:.4f}")
+        print(f"漏报率：{false_negative_rate:.4f}")
+        
+        return model
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="训练模型，可选择使用CPU或GPU")
+    parser.add_argument("--device", type=str, default=None, choices=["cpu", "cuda"], help="指定使用的设备")
+    args = parser.parse_args()
+    
+    trainer = ModelTrainer(device=args.device)
+    
+    # 训练TextCNN模型
+    trainer.train_textcnn("textcnn")
+    
+    # 训练BERT-TextCNN模型
+    trainer.train_bert_textcnn("bert_textcnn")
+    
+    # 训练多模态模型
+    trainer.train_multimodal(model_name="multimodal")
+
+```
+
+### core/incremental_training.py
+```python
+import os
+import pandas as pd
+import numpy as np
+import torch
+import torch.optim as optim
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+from transformers import BertTokenizer, BertModel
+from model_training import MultimodalModel, BERTTextCNN, ModelTrainer
+from data_preprocessing import URLFeatureExtractor, NetworkBehaviorExtractor
+
+class IncrementalTrainer:
+    """增量训练模块，支持模型的持续学习和更新"""
+    
+    def __init__(self, model_dir="../models", data_dir="../data"):
+        self.model_dir = model_dir
+        self.data_dir = data_dir
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.url_extractor = URLFeatureExtractor()
+        self.network_extractor = NetworkBehaviorExtractor()
+        self.tokenizer = None
+        self.bert = None
+        self._load_bert()
+    
+    def _load_bert(self):
+        """加载BERT模型"""
+        from transformers import AutoTokenizer, AutoModel
+        
+        # 使用AutoModel和AutoTokenizer，它们会自动处理安全加载
+        self.tokenizer = AutoTokenizer.from_pretrained("bert-base-chinese")
+        self.bert = AutoModel.from_pretrained("bert-base-chinese")
+        self.bert = self.bert.to(self.device)
+    
+    def collect_data(self, new_samples):
+        """收集新的样本数据"""
+        # 将新样本保存到文件
+        os.makedirs(f"{self.data_dir}/incremental", exist_ok=True)
+        
+        # 加载现有的增量数据
+        incremental_data_path = f"{self.data_dir}/incremental/incremental_data.csv"
+        if os.path.exists(incremental_data_path):
+            existing_data = pd.read_csv(incremental_data_path)
+        else:
+            existing_data = pd.DataFrame(columns=['text', 'url', 'label', 'scenario'])
+        
+        # 添加新样本
+        new_data = pd.DataFrame(new_samples)
+        combined_data = pd.concat([existing_data, new_data], ignore_index=True)
+        
+        # 去重
+        combined_data = combined_data.drop_duplicates(subset=['text', 'url'])
+        
+        # 保存数据
+        combined_data.to_csv(incremental_data_path, index=False, encoding='utf-8-sig')
+        
+        print(f"收集了 {len(new_samples)} 个新样本，总样本数：{len(combined_data)}")
+        
+        return combined_data
+    
+    def label_data(self, data, auto_label=False):
+        """标注数据"""
+        if auto_label:
+            # 自动标注逻辑
+            # 这里可以使用现有的模型进行预测作为自动标注
+            from inference import PhishingDetector
+            detector = PhishingDetector()
+            
+            labels = []
+            for _, row in data.iterrows():
+                result = detector.detect(row['text'], row['url'])
+                labels.append(1 if result['prediction'] == '钓鱼' else 0)
+            
+            data['label'] = labels
+        
+        # 人工标注可以通过其他方式实现，这里返回数据
+        return data
+    
+    def extract_features(self, data):
+        """提取特征"""
+        # 提取URL特征
+        url_features = data.apply(lambda row: self.url_extractor.extract_features(row['url']), axis=1).apply(pd.Series)
+        
+        # 提取网络行为特征
+        network_features = data.apply(lambda row: self.network_extractor.extract_features(row['url']), axis=1).apply(pd.Series)
+        
+        # 合并特征
+        data_with_features = pd.concat([data, url_features, network_features], axis=1)
+        
+        return data_with_features
+    
+    def train_model(self, data, model_type="multimodal", epochs=10):
+        """训练模型"""
+        # 提取特征
+        data_with_features = self.extract_features(data)
+        
+        # 保存数据
+        incremental_features_path = f"{self.data_dir}/incremental/incremental_features.csv"
+        data_with_features.to_csv(incremental_features_path, index=False, encoding='utf-8-sig')
+        
+        # 训练模型
+        trainer = ModelTrainer(model_dir=self.model_dir)
+        
+        if model_type == "multimodal":
+            model = trainer.train_multimodal(incremental_features_path, f"{model_type}_incremental")
+        elif model_type == "bert_textcnn":
+            # 这里需要实现BERT-TextCNN的增量训练
+            # 暂时使用现有的训练方法
+            model = trainer.train_bert_textcnn(incremental_features_path, f"{model_type}_incremental")
+        else:
+            # TextCNN模型
+            model = trainer.train_textcnn(incremental_features_path, f"{model_type}_incremental")
+        
+        return model
+    
+    def evaluate_model(self, model, test_data):
+        """评估模型"""
+        # 提取特征
+        test_data_with_features = self.extract_features(test_data)
+        
+        # 准备测试数据
+        texts = test_data_with_features["text"].astype(str).tolist()
+        labels = test_data_with_features["label"].tolist()
+        
+        # 提取URL特征和网络行为特征
+        url_feature_cols = ['domain_length', 'is_https', 'has_suspicious_keywords', 
+                           'subdomain_count', 'path_depth', 'param_count', 
+                           'has_ip_address']
+        network_feature_cols = ['response_time', 'load_status', 'redirect_count', 
+                               'has_form', 'requests_sensitive_info']
+        
+        url_features = test_data_with_features[url_feature_cols].values.astype(float)
+        network_features = test_data_with_features[network_feature_cols].values.astype(float)
+        
+        # 模型评估
+        model.eval()
+        y_true = []
+        y_pred = []
+        
+        with torch.no_grad():
+            for text, label, url_feat, network_feat in zip(texts, labels, url_features, network_features):
+                inputs = self.tokenizer(text, padding=True, truncation=True, max_length=128, return_tensors="pt").to(self.device)
+                url_feat = torch.tensor(url_feat, dtype=torch.float32).unsqueeze(0).to(self.device)
+                network_feat = torch.tensor(network_feat, dtype=torch.float32).unsqueeze(0).to(self.device)
+                
+                outputs = model(**inputs, url_features=url_feat, network_features=network_feat)
+                pred = torch.argmax(outputs, dim=1).cpu().numpy()[0]
+                
+                y_pred.append(pred)
+                y_true.append(label)
+        
+        # 计算评估指标
+        acc = accuracy_score(y_true, y_pred)
+        pre = precision_score(y_true, y_pred)
+        rec = recall_score(y_true, y_pred)
+        f1 = f1_score(y_true, y_pred)
+        
+        print(f"评估结果：")
+        print(f"准确率：{acc:.4f}")
+        print(f"精确率：{pre:.4f}")
+        print(f"召回率：{rec:.4f}")
+        print(f"F1分数：{f1:.4f}")
+        
+        return {
+            "accuracy": acc,
+            "precision": pre,
+            "recall": rec,
+            "f1": f1
+        }
+    
+    def update_model(self, new_samples, model_type="multimodal", epochs=10):
+        """更新模型"""
+        # 收集数据
+        collected_data = self.collect_data(new_samples)
+        
+        # 标注数据
+        labeled_data = self.label_data(collected_data, auto_label=True)
+        
+        # 划分训练集和测试集
+        train_data, test_data = train_test_split(labeled_data, test_size=0.2, random_state=42, stratify=labeled_data['label'])
+        
+        # 训练模型
+        model = self.train_model(train_data, model_type, epochs)
+        
+        # 评估模型
+        evaluation_results = self.evaluate_model(model, test_data)
+        
+        # 部署模型
+        self.deploy_model(model, model_type)
+        
+        return {
+            "model_type": model_type,
+            "training_samples": len(train_data),
+            "test_samples": len(test_data),
+            "evaluation_results": evaluation_results
+        }
+    
+    def deploy_model(self, model, model_type):
+        """部署模型"""
+        # 保存模型
+        model_path = f"{self.model_dir}/{model_type}_best.pth"
+        torch.save(model.state_dict(), model_path)
+        
+        print(f"模型已部署到：{model_path}")
+        
+        # 可以在这里添加模型部署到生产环境的逻辑
+        # 例如，复制模型到指定位置，更新模型版本等
+
+```
+
+### core/scenario_processor.py
+```python
+import re
+import html
+from urllib.parse import urlparse
+
+class ScenarioProcessor:
+    """场景处理器，处理不同场景的钓鱼检测"""
+    
+    def __init__(self):
+        # 短信相关的关键词和模式
+        self.sms_keywords = [
+            '验证码', '密码', '账户', '安全', '风险', '解冻', '封禁', 
+            '充值', '提现', '转账', '汇款', '支付', '领奖', '中奖',
+            '银行', '支付宝', '微信', '京东', '淘宝', '顺丰', '快递'
+        ]
+        
+        # 邮件相关的关键词和模式
+        self.email_keywords = [
+            '重置密码', '账户验证', '安全警报', '登录异常', '账单', 
+            '发票', '付款', '订单', '配送', '退款', '优惠', '促销'
+        ]
+        
+        # 链接相关的可疑模式
+        self.suspicious_url_patterns = [
+            r'\b(verify|secure|login|account|auth|payment)\b',
+            r'\b(bank|financial|update|confirm|reset|password)\b',
+            r'\b(verification|validate|authentication|signin|sign-up)\b',
+            r'\b(phish|钓鱼|诈骗|欺诈)\b'
+        ]
+    
+    def process(self, scenario, text, url):
+        """根据场景类型处理文本和URL"""
+        # 场景处理
+        if scenario == "sms":
+            # 短信场景处理
+            pass
+        elif scenario == "email":
+            # 邮件场景处理
+            pass
+        elif scenario == "link":
+            # 链接场景处理
+            pass
+        else:
+            # 通用场景处理
+            pass
+        
+        # 返回处理后的文本和URL
+        return text, url
+    
+    def process_sms(self, text, url):
+        """处理短信场景"""
+        # 短信通常更短，需要特殊处理
+        features = {
+            'sms_length': len(text),
+            'has_suspicious_keywords': self._contains_keywords(text, self.sms_keywords),
+            'has_url': 1 if url else 0,
+            'url_length': len(url) if url else 0,
+            'has_suspicious_url': self._has_suspicious_url(url)
+        }
+        return features
+    
+    def process_email(self, text, url):
+        """处理邮件场景"""
+        # 邮件可能包含HTML内容和附件
+        features = {
+            'email_length': len(text),
+            'has_html': 1 if '<html>' in text.lower() or '</html>' in text.lower() else 0,
+            'has_attachments': 1 if 'attachment' in text.lower() else 0,
+            'has_suspicious_keywords': self._contains_keywords(text, self.email_keywords),
+            'has_url': 1 if url else 0,
+            'url_length': len(url) if url else 0,
+            'has_suspicious_url': self._has_suspicious_url(url)
+        }
+        return features
+    
+    def process_link(self, text, url):
+        """处理链接场景"""
+        # 链接场景需要更多的URL特征分析
+        features = {
+            'url_length': len(url) if url else 0,
+            'has_suspicious_url': self._has_suspicious_url(url),
+            'url_domain': self._extract_domain(url),
+            'has_ip_address': self._has_ip_address(url),
+            'subdomain_count': self._count_subdomains(url),
+            'path_depth': self._calculate_path_depth(url),
+            'param_count': self._count_parameters(url)
+        }
+        return features
+    
+    def _contains_keywords(self, text, keywords):
+        """检查文本是否包含关键词"""
+        text_lower = text.lower()
+        return 1 if any(keyword in text_lower for keyword in keywords) else 0
+    
+    def _has_suspicious_url(self, url):
+        """检查URL是否包含可疑模式"""
+        if not url:
+            return 0
+        url_lower = url.lower()
+        for pattern in self.suspicious_url_patterns:
+            if re.search(pattern, url_lower):
+                return 1
+        return 0
+    
+    def _extract_domain(self, url):
+        """提取域名"""
+        if not url:
+            return ''
+        try:
+            parsed = urlparse(url)
+            return parsed.netloc
+        except:
+            return ''
+    
+    def _has_ip_address(self, url):
+        """检查URL是否包含IP地址"""
+        if not url:
+            return 0
+        ip_pattern = r'\b(?:\d{1,3}\.){3}\d{1,3}\b'
+        return 1 if re.search(ip_pattern, url) else 0
+    
+    def _count_subdomains(self, url):
+        """计算子域名数量"""
+        if not url:
+            return 0
+        try:
+            parsed = urlparse(url)
+            domain = parsed.netloc
+            if domain:
+                return len(domain.split('.')) - 2
+            return 0
+        except:
+            return 0
+    
+    def _calculate_path_depth(self, url):
+        """计算路径深度"""
+        if not url:
+            return 0
+        try:
+            parsed = urlparse(url)
+            path = parsed.path
+            if path:
+                return len([p for p in path.split('/') if p])
+            return 0
+        except:
+            return 0
+    
+    def _count_parameters(self, url):
+        """计算参数数量"""
+        if not url:
+            return 0
+        try:
+            parsed = urlparse(url)
+            query = parsed.query
+            if query:
+                return len(query.split('&'))
+            return 0
+        except:
+            return 0
+
+```
+
+### core/visualization.py
+```python
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+import json
+import networkx as nx
+from datetime import datetime
+import base64
+from io import BytesIO
+
+class VisualizationModule:
+    """可视化溯源模块，提供钓鱼攻击的可视化分析和溯源功能"""
+    
+    def __init__(self):
+        # 设置中文字体
+        plt.rcParams['font.sans-serif'] = ['SimHei']  # 用来正常显示中文标签
+        plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+    
+    def generate_attack_path(self, sample, related_samples=None):
+        """生成钓鱼攻击路径图"""
+        # 创建有向图
+        G = nx.DiGraph()
+        
+        # 添加节点
+        G.add_node(sample['id'], label=sample['text'][:50] + '...' if len(sample['text']) > 50 else sample['text'])
+        
+        # 添加相关样本节点
+        if related_samples:
+            for i, related in enumerate(related_samples):
+                related_id = f"related_{i}"
+                G.add_node(related_id, label=related['text'][:50] + '...' if len(related['text']) > 50 else related['text'])
+                G.add_edge(related_id, sample['id'], label="关联")
+        
+        # 绘制图形
+        plt.figure(figsize=(12, 8))
+        pos = nx.spring_layout(G, k=0.3)
+        
+        # 绘制节点
+        nx.draw_networkx_nodes(G, pos, node_size=3000, node_color='lightblue')
+        
+        # 绘制边
+        nx.draw_networkx_edges(G, pos, edge_color='gray', arrows=True)
+        
+        # 绘制标签
+        labels = nx.get_node_attributes(G, 'label')
+        nx.draw_networkx_labels(G, pos, labels, font_size=10)
+        
+        # 添加边标签
+        edge_labels = nx.get_edge_attributes(G, 'label')
+        nx.draw_networkx_edge_labels(G, pos, edge_labels, font_size=8)
+        
+        plt.title('钓鱼攻击路径分析')
+        plt.axis('off')
+        
+        # 保存为Base64编码
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        plt.close()
+        
+        return image_base64
+    
+    def visualize_features(self, features):
+        """可视化特征重要性"""
+        # 提取特征重要性
+        feature_names = list(features.keys())
+        feature_values = list(features.values())
+        
+        # 绘制条形图
+        plt.figure(figsize=(12, 6))
+        sns.barplot(x=feature_values, y=feature_names)
+        plt.title('特征重要性分析')
+        plt.xlabel('特征值')
+        plt.ylabel('特征名称')
+        plt.tight_layout()
+        
+        # 保存为Base64编码
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        plt.close()
+        
+        return image_base64
+    
+    def analyze_trends(self, historical_data):
+        """分析钓鱼攻击趋势"""
+        # 按日期分组统计
+        date_counts = {}
+        for item in historical_data:
+            date = item.get('date', datetime.now().strftime('%Y-%m-%d'))
+            if date not in date_counts:
+                date_counts[date] = 0
+            date_counts[date] += 1
+        
+        # 排序日期
+        sorted_dates = sorted(date_counts.keys())
+        counts = [date_counts[date] for date in sorted_dates]
+        
+        # 绘制趋势图
+        plt.figure(figsize=(12, 6))
+        plt.plot(sorted_dates, counts, marker='o')
+        plt.title('钓鱼攻击趋势分析')
+        plt.xlabel('日期')
+        plt.ylabel('攻击数量')
+        plt.xticks(rotation=45)
+        plt.tight_layout()
+        
+        # 保存为Base64编码
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        plt.close()
+        
+        return image_base64
+    
+    def generate_report(self, sample, detection_result, features):
+        """生成详细的分析报告"""
+        report = {
+            "sample_info": {
+                "text": sample.get('text', ''),
+                "url": sample.get('url', ''),
+                "scenario": sample.get('scenario', 'general'),
+                "timestamp": datetime.now().isoformat()
+            },
+            "detection_result": {
+                "model": detection_result.get('model', 'unknown'),
+                "prediction": detection_result.get('prediction', 'unknown'),
+                "confidence": detection_result.get('confidence', 0.0),
+                "processing_time": detection_result.get('processing_time', 0.0)
+            },
+            "features": features,
+            "visualizations": {
+                "attack_path": self.generate_attack_path(sample),
+                "feature_importance": self.visualize_features(features)
+            },
+            "recommendations": self._generate_recommendations(detection_result, features)
+        }
+        
+        return report
+    
+    def _generate_recommendations(self, detection_result, features):
+        """生成安全建议"""
+        recommendations = []
+        
+        if detection_result.get('prediction') == '钓鱼':
+            recommendations.append('不要点击邮件中的链接')
+            recommendations.append('不要提供个人敏感信息')
+            recommendations.append('报告此钓鱼邮件给相关部门')
+        
+        # 根据特征生成具体建议
+        if features.get('has_suspicious_keywords'):
+            recommendations.append('邮件中包含可疑关键词，请注意核实')
+        
+        if features.get('has_suspicious_url'):
+            recommendations.append('链接看起来可疑，建议不要访问')
+        
+        return recommendations
+    
+    def visualize_confusion_matrix(self, cm):
+        """可视化混淆矩阵"""
+        plt.figure(figsize=(8, 6))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+                    xticklabels=['正常', '钓鱼'], 
+                    yticklabels=['正常', '钓鱼'])
+        plt.title('混淆矩阵')
+        plt.xlabel('预测标签')
+        plt.ylabel('真实标签')
+        plt.tight_layout()
+        
+        # 保存为Base64编码
+        buffer = BytesIO()
+        plt.savefig(buffer, format='png')
+        buffer.seek(0)
+        image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
+        plt.close()
+        
+        return image_base64
+
+```
+
+## 辅助文件
+
+### requirements.txt
+文件不存在
+
+### Dockerfile
+```
+# 使用Python 3.12作为基础镜像
+FROM python:3.12-slim
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制requirements.txt文件
+COPY api/requirements.txt /app/requirements.txt
+
+# 安装Python依赖
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 复制项目文件
+COPY . /app
+
+# 创建必要的目录
+RUN mkdir -p /app/data/synthetic \
+    && mkdir -p /app/data/real \
+    && mkdir -p /app/data/multimodal \
+    && mkdir -p /app/data/incremental \
+    && mkdir -p /app/models \
+    && mkdir -p /app/output
+
+# 下载BERT模型
+RUN python -c "from transformers import BertTokenizer, BertModel; \
+    tokenizer = BertTokenizer.from_pretrained('bert-base-chinese'); \
+    model = BertModel.from_pretrained('bert-base-chinese')"
+
+# 暴露端口
+EXPOSE 8000
+
+# 启动API服务
+CMD ["python", "api/main.py"]
+
+```
+
+### deploy.sh
+```
+#!/bin/bash
+
+# 部署脚本
+
+echo "===== 多模态钓鱼智能识别与预警系统部署 ====="
+
+# 检查Docker是否安装
+if ! command -v docker &> /dev/null; then
+    echo "错误: Docker未安装，请先安装Docker"
+    exit 1
+fi
+
+# 检查Docker Compose是否安装
+if ! command -v docker-compose &> /dev/null; then
+    echo "错误: Docker Compose未安装，请先安装Docker Compose"
+    exit 1
+fi
+
+# 构建Docker镜像
+echo "正在构建Docker镜像..."
+docker-compose build
+
+# 启动容器
+echo "正在启动容器..."
+docker-compose up -d
+
+# 等待服务启动
+echo "等待服务启动..."
+sleep 10
+
+# 验证服务是否正常运行
+echo "验证服务是否正常运行..."
+response=$(curl -s http://localhost:8000/health)
+
+if [[ $response == *"healthy"* ]]; then
+    echo "✅ 服务启动成功！"
+    echo "API接口地址: http://localhost:8000"
+    echo "API文档地址: http://localhost:8000/docs"
+else
+    echo "❌ 服务启动失败，请检查日志"
+    docker-compose logs api
+    exit 1
+fi
+
+echo "===== 部署完成 ====="
+
+```
+

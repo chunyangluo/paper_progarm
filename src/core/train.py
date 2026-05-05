@@ -1,0 +1,46 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+模型训练脚本，只负责模型训练
+"""
+
+import sys
+import os
+from model_training import ModelTrainer
+
+if __name__ == "__main__":
+    try:
+        # 初始化ModelTrainer
+        trainer = ModelTrainer("../models", "../output")
+        
+        # 版本数据集路径
+        version_dataset_path = "../data/versions/dataset_20260411_chifraud.csv"
+        
+        # 检查数据集是否存在
+        if not os.path.exists(version_dataset_path):
+            print(f"❌ 数据集不存在：{version_dataset_path}")
+            print("请先运行 update_dataset.py 生成数据集！")
+            sys.exit(1)
+        
+        # 训练TextCNN模型
+        print("\n开始训练TextCNN模型...")
+        trainer.train_textcnn(version_dataset_path, "textcnn")
+        
+        # 训练BERT-TextCNN模型
+        print("\n开始训练BERT-TextCNN模型...")
+        trainer.train_bert_textcnn(version_dataset_path, "bert_textcnn")
+        
+        # 训练多模态模型
+        print("\n开始训练多模态模型...")
+        trainer.train_multimodal(model_name="multimodal")
+        
+        print("\n✅ 模型训练完成！")
+        print("\n📊 训练结果：")
+        print("   - TextCNN模型已训练完成")
+        print("   - BERT-TextCNN模型已训练完成")
+        print("   - 多模态模型已训练完成")
+        print("   - 模型已保存到 models/ 目录")
+        print("   - 训练结果已保存到 output/ 目录")
+    except Exception as e:
+        print(f"❌ 执行过程中出错: {e}")
+        sys.exit(1)

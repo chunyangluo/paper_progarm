@@ -1,0 +1,69 @@
+{
+  "expansion_date": "2026-04-21T22:54:40.178223",
+  "target": "100,000+",
+  "achieved": 156286,
+  "stats": {
+    "existing_total": 49398,
+    "existing_phishing": 24699,
+    "existing_normal": 24699,
+    "chifraud_phishing": 50000,
+    "chifraud_normal": 50000,
+    "template_total": 26000,
+    "template_phishing": 12500,
+    "template_normal": 13500,
+    "after_merge_total": 163310,
+    "after_merge_phishing": "78143",
+    "after_merge_normal": "85167",
+    "augmented_phishing": 0,
+    "augmented_normal": 0,
+    "final_total": 156286,
+    "final_phishing": "78143",
+    "final_normal": "78143",
+    "quality_check": {
+      "null_text": 0,
+      "null_label": 0,
+      "duplicates": 0,
+      "invalid_labels": 0,
+      "short_texts": 0,
+      "keyword_coverage": "14/14",
+      "text_length": {
+        "mean": 82.0,
+        "std": 69.2,
+        "min": 3,
+        "max": 3143,
+        "median": 63.0
+      },
+      "scenario_distribution": {
+        "sms": 63521,
+        "general": 42116,
+        "email": 5381,
+        "link": 2995,
+        "app": 2908
+      },
+      "source_distribution_top20": {
+        "chifraud_chifraud_train_general": 21335,
+        "chifraud_chifraud_t2023_general": 11122,
+        "chifraud_chifraud_t2022_general": 10680,
+        "chifraud_chifraud_train_sexual": 9946,
+        "template_phishing_variant": 8000,
+        "chifraud_chifraud_t2023_sexual": 7048,
+        "chifraud_chifraud_t2022_sexual": 5166,
+        "phiUSIIL": 5000,
+        "phishTank": 4999,
+        "template_bank_normal": 4585,
+        "chifraud_chifraud_train_fake_certificate": 3764,
+        "template_phishing_email": 3000,
+        "template_ecommerce_normal": 2750,
+        "chifraud_chifraud_t2023_drug_dealing": 2284,
+        "synthetic_normal_general": 1907,
+        "template_social_normal": 1845,
+        "chifraud_chifraud_t2022_fake_certificate": 1841,
+        "template_gov_normal": 1835,
+        "synthetic_email": 1500,
+        "template_hard_phishing": 1500
+      }
+    },
+    "quality_passed": true
+  },
+  "output_file": "c:\\Users\\chuny\\Desktop\\paper_progarm\\data\\versions\\dataset_20260421_100k.csv"
+}

@@ -1,0 +1,105 @@
+{
+  "BERT-TextCNN": [
+    {
+      "accuracy": 0.9921875,
+      "precision": 0.9846153846153847,
+      "recall": 1.0,
+      "f1_score": 0.9922480620155039,
+      "fpr": 0.015625,
+      "fnr": 0.0,
+      "tp": 64,
+      "fp": 1,
+      "tn": 63,
+      "fn": 0,
+      "auc": 0.9951171875,
+      "training_time": 31.510459423065186,
+      "best_config": {
+        "bert_lr": 2e-05,
+        "cnn_lr": 0.0001,
+        "batch_size": 12,
+        "max_length": 128,
+        "epochs": 12,
+        "patience": 4,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "grad_accum_steps": 3,
+        "seed": 42
+      },
+      "best_val_f1": 0.9841269841269841,
+      "seed": 42,
+      "training_profile": "balanced",
+      "benchmark_mode": false
+    }
+  ],
+  "Multimodal-text_only": [
+    {
+      "accuracy": 0.5,
+      "precision": 0.5,
+      "recall": 1.0,
+      "f1_score": 0.6666666666666666,
+      "fpr": 1.0,
+      "fnr": 0.0,
+      "tp": 64,
+      "fp": 64,
+      "tn": 0,
+      "fn": 0,
+      "auc": 0.6239013671875,
+      "training_time": 23.680931568145752,
+      "best_config": {
+        "bert_lr": 2e-05,
+        "fusion_lr": 0.0001,
+        "batch_size": 12,
+        "max_length": 128,
+        "epochs": 12,
+        "patience": 4,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "grad_accum_steps": 3,
+        "resume": true,
+        "min_real_network_feature_ratio": 0.7,
+        "model_version": "multimodal_v2",
+        "seed": 42,
+        "ablation_mode": "text_only"
+      },
+      "best_val_f1": 0.6666666666666666,
+      "seed": 42,
+      "training_profile": "balanced",
+      "benchmark_mode": false
+    }
+  ],
+  "Multimodal-text_url": [
+    {
+      "accuracy": 0.5,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1_score": 0.0,
+      "fpr": 0.0,
+      "fnr": 1.0,
+      "tp": 0,
+      "fp": 0,
+      "tn": 64,
+      "fn": 64,
+      "training_time": 18.4734845161438,
+      "best_config": {
+        "bert_lr": 2e-05,
+        "fusion_lr": 0.0001,
+        "batch_size": 12,
+        "max_length": 128,
+        "epochs": 12,
+        "patience": 4,
+        "warmup_ratio": 0.1,
+        "weight_decay": 0.01,
+        "grad_accum_steps": 3,
+        "resume": true,
+        "min_real_network_feature_ratio": 0.7,
+        "model_version": "multimodal_v2",
+        "seed": 42,
+        "ablation_mode": "text_url"
+      },
+      "best_val_f1": 0.0,
+      "seed": 42,
+      "training_profile": "balanced",
+      "benchmark_mode": false
+    }
+  ]
+}

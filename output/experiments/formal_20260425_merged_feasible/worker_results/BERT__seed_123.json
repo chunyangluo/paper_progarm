@@ -1,0 +1,26 @@
+{
+  "accuracy": 0.9934096871200973,
+  "precision": 0.9963950045062444,
+  "recall": 0.9904018428461735,
+  "f1_score": 0.9933893845067711,
+  "fpr": 0.003582853486884197,
+  "fnr": 0.009598157153826465,
+  "tp": 7739,
+  "fp": 28,
+  "tn": 7787,
+  "fn": 75,
+  "auc": 0.9984169775167724,
+  "training_time": 12049.957493066788,
+  "best_config": {
+    "bert_lr": 2e-05,
+    "cls_lr": 0.0001,
+    "batch_size": 8,
+    "max_length": 128,
+    "epochs": 12,
+    "patience": 4
+  },
+  "best_val_f1": 0.9939075226062977,
+  "seed": 123,
+  "training_profile": "balanced",
+  "benchmark_mode": false
+}

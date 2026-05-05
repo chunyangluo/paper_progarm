@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nightly Network Collection Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; color: #1f2937; background: #f8fafc; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .field { min-width: 220px; }
+    label { font-size: 12px; color: #6b7280; display: block; margin-bottom: 4px; }
+    input { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+    button { padding: 8px 12px; border: 0; background: #2563eb; color: #fff; border-radius: 8px; cursor: pointer; }
+    .muted { color: #6b7280; font-size: 12px; }
+    .kpi { font-size: 24px; font-weight: bold; }
+    .bar-wrap { background: #e5e7eb; border-radius: 999px; height: 12px; overflow: hidden; }
+    .bar { background: #10b981; height: 100%; width: 0%; transition: width .3s ease; }
+    .error { color: #dc2626; }
+    code { background: #eef2ff; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h2>夜间网络特征采集监控面板</h2>
+  <p class="muted">用于查看 <code>latest_report.json</code> 的进度与覆盖率。</p>
+
+  <div class="card">
+    <div class="row">
+      <div class="field">
+        <label>Run Name</label>
+        <input id="runName" value="dataset_20260421_100k_nightly" />
+      </div>
+      <div class="field">
+        <label>自动刷新（秒）</label>
+        <input id="intervalSec" value="30" />
+      </div>
+      <div class="field" style="align-self:flex-end;">
+        <button id="refreshBtn">立即刷新</button>
+      </div>
+      <div class="field" style="align-self:flex-end;">
+        <button id="startBtn" style="background:#059669">开始采集</button>
+      </div>
+      <div class="field" style="align-self:flex-end;">
+        <button id="stopBtn" style="background:#dc2626">停止采集</button>
+      </div>
+    </div>
+    <p class="muted">当前请求路径：<span id="reportPath"></span></p>
+    <p id="collectorStatusText" class="muted"></p>
+    <p id="statusText" class="muted"></p>
+    <p id="errorText" class="error"></p>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="field"><label>总分片</label><div id="totalChunks" class="kpi">-</div></div>
+      <div class="field"><label>已完成分片</label><div id="completedChunks" class="kpi">-</div></div>
+      <div class="field"><label>剩余分片</label><div id="remainingChunks" class="kpi">-</div></div>
+      <div class="field"><label>是否完成</label><div id="doneFlag" class="kpi">-</div></div>
+    </div>
+    <div style="margin-top: 12px;">
+      <label>采集进度</label>
+      <div class="bar-wrap"><div class="bar" id="progressBar"></div></div>
+      <p class="muted" id="progressText">任务进度（按分片）</p>
+    </div>
+    <div style="margin-top: 12px;">
+      <label>当前分片内进度（0 ~ n URL）</label>
+      <div class="bar-wrap"><div class="bar" id="chunkProgressBar" style="background:#2563eb;"></div></div>
+      <p class="muted" id="chunkProgressText">-</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="field"><label>目标采集条数</label><div id="targetUrlsVal" class="kpi">-</div></div>
+      <div class="field"><label>已处理条数</label><div id="processedUrlsVal" class="kpi">-</div></div>
+      <div class="field"><label>实际处理进度</label><div id="processedPctVal" class="kpi">-</div></div>
+    </div>
+    <div style="margin-top: 12px;">
+      <label>全局实际处理进度（按条数）</label>
+      <div class="bar-wrap"><div class="bar" id="processedProgressBar" style="background:#f59e0b;"></div></div>
+      <p class="muted" id="processedProgressText">-</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div class="field"><label>总行数</label><div id="rowsVal" class="kpi">-</div></div>
+      <div class="field"><label>已有 network_features</label><div id="nonEmptyVal" class="kpi">-</div></div>
+      <div class="field"><label>覆盖率</label><div id="coverageVal" class="kpi">-</div></div>
+    </div>
+    <p class="muted">说明：以上覆盖率仅在执行过合并后才会出现。</p>
+    <p class="muted">最近更新时间：<span id="updatedAt">-</span></p>
+  </div>
+
+  <script>
+    let timer = null;
+    let ctlTimer = null;
+    async function postControl(url) {
+      const res = await fetch(url, { method: "POST", cache: "no-store" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return res.json();
+    }
+
+    async function refreshCollectorStatus() {
+      const statusEl = document.getElementById("collectorStatusText");
+      try {
+        const res = await fetch("/api/collector/status", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const prefix = data.running ? "采集进程运行中" : "采集进程未运行";
+        statusEl.textContent = `${prefix} | pid=${data.pid ?? "-"} | run=${data.run_name ?? "-"}`;
+      } catch {
+        statusEl.textContent = "控制API不可用（当前可能是纯静态服务模式）";
+      }
+    }
+
+
+    function getReportUrl() {
+      const runName = document.getElementById("runName").value.trim();
+      const url = `/data/nightly_network_runs/${runName}/latest_report.json`;
+      document.getElementById("reportPath").textContent = url;
+      return url;
+    }
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value ?? "-";
+    }
+
+    async function refreshData() {
+      const errorEl = document.getElementById("errorText");
+      errorEl.textContent = "";
+      const statusEl = document.getElementById("statusText");
+      statusEl.textContent = "正在刷新...";
+      try {
+        const url = getReportUrl();
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        const total = data.total_chunks ?? null;
+        const completed = data.completed_chunks ?? null;
+        const remaining = data.remaining_chunks ?? null;
+        const done = data.done;
+        const running = data.running;
+
+        setText("totalChunks", total);
+        setText("completedChunks", completed);
+        setText("remainingChunks", remaining);
+        setText("doneFlag", (done === true ? "是" : done === false ? "否" : "-"));
+
+        const bar = document.getElementById("progressBar");
+        const rawGlobal = data.global_progress != null
+          ? Number(data.global_progress)
+          : ((total && completed != null) ? (completed / total) : 0);
+        const pct = Math.round(Math.max(0, Math.min(1, rawGlobal)) * 100);
+        bar.style.width = `${pct}%`;
+        setText("progressText", `${pct}%`);
+
+        const chunkBar = document.getElementById("chunkProgressBar");
+        const chunkRaw = data.current_chunk_progress != null ? Number(data.current_chunk_progress) : 0;
+        const chunkPct = Math.round(Math.max(0, Math.min(1, chunkRaw)) * 100);
+        chunkBar.style.width = `${chunkPct}%`;
+        const curIdx = data.current_chunk_idx != null ? data.current_chunk_idx : "-";
+        const curDone = data.current_chunk_processed_urls != null ? data.current_chunk_processed_urls : 0;
+        const curTotal = data.current_chunk_total_urls != null ? data.current_chunk_total_urls : 0;
+        setText("chunkProgressText", `chunk=${curIdx} | ${curDone}/${curTotal} | ${chunkPct}%`);
+
+        const targetUrls = data.global_target_urls ?? 0;
+        const processedUrls = data.global_processed_urls ?? 0;
+        const processedRaw = data.global_processed_progress != null ? Number(data.global_processed_progress) : 0;
+        const processedPct = Math.round(Math.max(0, Math.min(1, processedRaw)) * 100);
+        setText("targetUrlsVal", targetUrls);
+        setText("processedUrlsVal", processedUrls);
+        setText("processedPctVal", `${processedPct}%`);
+        document.getElementById("processedProgressBar").style.width = `${processedPct}%`;
+        setText("processedProgressText", `${processedUrls}/${targetUrls} | ${processedPct}%`);
+
+        setText("rowsVal", data.rows ?? "-");
+        const nonEmpty = data.non_empty_network_features ?? data.global_non_empty_network_features ?? "-";
+        setText("nonEmptyVal", nonEmpty);
+        const cov = data.coverage != null ? Number(data.coverage) : (data.global_coverage_progress != null ? Number(data.global_coverage_progress) : null);
+        setText("coverageVal", cov != null ? `${(cov * 100).toFixed(2)}%` : "-");
+        setText("updatedAt", data.updated_at ?? "-");
+        const phase = data.phase || "-";
+        statusEl.textContent = `刷新成功：${new Date().toLocaleString()} | running=${running === true ? "是" : "否"} | phase=${phase}`;
+      } catch (e) {
+        errorEl.textContent = `读取报告失败：${e.message}。请确认已在项目根目录运行 http server，并且 run-name 正确。`;
+        statusEl.textContent = "刷新失败";
+      }
+    }
+
+    function restartTimer() {
+      if (timer) clearInterval(timer);
+      const sec = parseInt(document.getElementById("intervalSec").value, 10);
+      if (!Number.isFinite(sec) || sec <= 0) return;
+      timer = setInterval(refreshData, sec * 1000);
+    }
+
+    document.getElementById("refreshBtn").addEventListener("click", refreshData);
+    document.getElementById("startBtn").addEventListener("click", async () => {
+      const err = document.getElementById("errorText");
+      err.textContent = "";
+      try {
+        await postControl("/api/collector/start");
+        await refreshCollectorStatus();
+      } catch (e) {
+        err.textContent = `启动采集失败：${e.message}`;
+      }
+    });
+    document.getElementById("stopBtn").addEventListener("click", async () => {
+      const err = document.getElementById("errorText");
+      err.textContent = "";
+      try {
+        await postControl("/api/collector/stop");
+        await refreshCollectorStatus();
+      } catch (e) {
+        err.textContent = `停止采集失败：${e.message}`;
+      }
+    });
+    document.getElementById("intervalSec").addEventListener("change", restartTimer);
+    document.getElementById("runName").addEventListener("change", refreshData);
+
+    refreshData();
+    restartTimer();
+    refreshCollectorStatus();
+    ctlTimer = setInterval(refreshCollectorStatus, 5000);
+  </script>
+</body>
+</html>

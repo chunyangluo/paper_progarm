@@ -1,0 +1,164 @@
+[
+  {
+    "id": "TC-3.1",
+    "name": "Phishing SMS detection",
+    "passed": true,
+    "detail": "prediction=钓鱼, confidence=0.9900, model=bert_textcnn"
+  },
+  {
+    "id": "TC-3.2",
+    "name": "Response has sample_id",
+    "passed": true,
+    "detail": "sample_id=s_1776696266_d79ff337"
+  },
+  {
+    "id": "TC-3.3",
+    "name": "Response has processing_time",
+    "passed": true,
+    "detail": "time=0.195s"
+  },
+  {
+    "id": "TC-3.4",
+    "name": "Confidence in valid range",
+    "passed": true,
+    "detail": "confidence=0.99"
+  },
+  {
+    "id": "TC-3.5",
+    "name": "Normal text detection",
+    "passed": true,
+    "detail": "prediction=正常, confidence=0.8923"
+  },
+  {
+    "id": "TC-3.6",
+    "name": "Email scenario detection",
+    "passed": true,
+    "detail": "scenario=email"
+  },
+  {
+    "id": "TC-3.7",
+    "name": "Link scenario detection",
+    "passed": true,
+    "detail": "scenario=link"
+  },
+  {
+    "id": "TC-3.8",
+    "name": "Multimodal model selection",
+    "passed": true,
+    "detail": "model=multimodal"
+  },
+  {
+    "id": "TC-3.9",
+    "name": "Cache mechanism",
+    "passed": true,
+    "detail": "first=False, second=True"
+  },
+  {
+    "id": "TC-4.1",
+    "name": "Batch detection returns results",
+    "passed": true,
+    "detail": "total=3"
+  },
+  {
+    "id": "TC-4.2",
+    "name": "Batch counts correct",
+    "passed": true,
+    "detail": "phishing=2, normal=1"
+  },
+  {
+    "id": "TC-4.3",
+    "name": "Batch has avg processing time",
+    "passed": true,
+    "detail": "avg=0.009s"
+  },
+  {
+    "id": "TC-5.1",
+    "name": "List alerts",
+    "passed": true,
+    "detail": "count=0"
+  },
+  {
+    "id": "TC-5.2",
+    "name": "Unhandled alert count",
+    "passed": true,
+    "detail": "count=0"
+  },
+  {
+    "id": "TC-5.3",
+    "name": "Filter unhandled alerts",
+    "passed": true,
+    "detail": "count=0"
+  },
+  {
+    "id": "TC-6.1",
+    "name": "Create sample",
+    "passed": true,
+    "detail": "sample_id=sample_3a754e0d658c"
+  },
+  {
+    "id": "TC-6.2",
+    "name": "List samples",
+    "passed": true,
+    "detail": "count=4"
+  },
+  {
+    "id": "TC-6.3",
+    "name": "Get sample by ID",
+    "passed": true,
+    "detail": "sample_id=sample_3a754e0d658c"
+  },
+  {
+    "id": "TC-6.4",
+    "name": "Batch create samples",
+    "passed": true,
+    "detail": "created=2"
+  },
+  {
+    "id": "TC-7.1",
+    "name": "Get model info",
+    "passed": true,
+    "detail": "models=['bert_textcnn', 'multimodal']"
+  },
+  {
+    "id": "TC-7.2",
+    "name": "List model versions",
+    "passed": true,
+    "detail": "count=0"
+  },
+  {
+    "id": "TC-7.3",
+    "name": "Get model performance",
+    "passed": true,
+    "detail": "type=bert_textcnn, loaded=True"
+  },
+  {
+    "id": "TC-7.4",
+    "name": "Set active model",
+    "passed": true,
+    "detail": "active=bert_textcnn"
+  },
+  {
+    "id": "TC-8.1",
+    "name": "List training tasks",
+    "passed": true,
+    "detail": "count=0"
+  },
+  {
+    "id": "TC-9.1",
+    "name": "Get resource info",
+    "passed": true,
+    "detail": "monitoring=True"
+  },
+  {
+    "id": "TC-9.2",
+    "name": "Get trend data",
+    "passed": true,
+    "detail": "count=0"
+  },
+  {
+    "id": "TC-9.3",
+    "name": "List backups",
+    "passed": true,
+    "detail": "count=0"
+  }
+]

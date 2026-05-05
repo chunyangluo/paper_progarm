@@ -1,0 +1,73 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+.venv/
+env/
+.env
+.env.*
+!.env.example
+*.egg-info/
+.eggs/
+dist/
+build/
+*.spec
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# --- Node (frontend) ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- 大文件与运行时数据（勿提交）---
+*.pth
+*.pt
+models/*.pth
+models/*.pt
+*.pkl
+data/db/*.db
+data/backups/*.db
+
+# Hugging Face / 下载缓存（若放在项目内）
+.cache/
+models/.cache/
+
+# --- 系统与编辑器 ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+*.swp
+*.swo
+.vscode/*
+!.vscode/extensions.json
+
+# --- Cursor 本地 ---
+.cursor/
+
+# --- 日志与临时缓存 ---
+logs/
+*.log
+network_features_cache.json
+
+# --- 大型数据（本地保留；需要进库可用 Git LFS 或单独压缩包）---
+data/**/*.csv
+data/nightly_network_runs/
+src/core/data/**/*.csv
+src/data/**/*.csv
+# 嵌套独立 Git 仓库，勿以外层仓库直接跟踪
+src/data/raw/chifraud/
+
+# --- 可选：实验目录整体过大时取消注释 ---
+# output/experiments/

@@ -1,0 +1,27 @@
+{
+  "dataset": "dataset_20260421_100k.csv",
+  "dataset_path": "C:\\Users\\chuny\\Desktop\\paper_progarm\\data\\versions\\dataset_20260421_100k.csv",
+  "total": 156286,
+  "train": {
+    "count": 109399,
+    "phishing": 54700,
+    "normal": 54699
+  },
+  "val": {
+    "count": 31258,
+    "phishing": 15629,
+    "normal": 15629
+  },
+  "test": {
+    "count": 15629,
+    "phishing": 7814,
+    "normal": 7815
+  },
+  "seed": 42,
+  "ratio": [
+    0.7,
+    0.2,
+    0.1
+  ],
+  "created_at": "2026-05-01T10:04:56.164306"
+}

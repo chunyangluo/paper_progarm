@@ -1,0 +1,155 @@
+[
+  {
+    "profile": "safe",
+    "model": "BERT",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "ok",
+    "elapsed_seconds": 14.276553630828857,
+    "f1_score": 0.9393939393939394,
+    "accuracy": 0.9375,
+    "best_val_f1": 0.9538461538461539,
+    "best_config": {
+      "bert_lr": 2e-05,
+      "cls_lr": 0.0001,
+      "batch_size": 4,
+      "max_length": 128,
+      "epochs": 2,
+      "patience": 2
+    }
+  },
+  {
+    "profile": "safe",
+    "model": "BERT-TextCNN",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "ok",
+    "elapsed_seconds": 11.008436441421509,
+    "f1_score": 0.6956521739130435,
+    "accuracy": 0.5625,
+    "best_val_f1": 0.6808510638297872,
+    "best_config": {
+      "bert_lr": 2e-05,
+      "cnn_lr": 0.0001,
+      "batch_size": 8,
+      "max_length": 128,
+      "epochs": 2,
+      "patience": 2,
+      "warmup_ratio": 0.1,
+      "weight_decay": 0.01,
+      "grad_accum_steps": 4,
+      "seed": 42
+    }
+  },
+  {
+    "profile": "safe",
+    "model": "Multimodal-full",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "failed",
+    "elapsed_seconds": 5.890351057052612,
+    "error": "worker process exited with code 1"
+  },
+  {
+    "profile": "balanced",
+    "model": "BERT",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "ok",
+    "elapsed_seconds": 13.9087655544281,
+    "f1_score": 0.9552238805970149,
+    "accuracy": 0.953125,
+    "best_val_f1": 0.9538461538461539,
+    "best_config": {
+      "bert_lr": 2e-05,
+      "cls_lr": 0.0001,
+      "batch_size": 8,
+      "max_length": 128,
+      "epochs": 2,
+      "patience": 2
+    }
+  },
+  {
+    "profile": "balanced",
+    "model": "BERT-TextCNN",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "ok",
+    "elapsed_seconds": 12.575100898742676,
+    "f1_score": 0.6956521739130435,
+    "accuracy": 0.5625,
+    "best_val_f1": 0.6808510638297872,
+    "best_config": {
+      "bert_lr": 2e-05,
+      "cnn_lr": 0.0001,
+      "batch_size": 12,
+      "max_length": 128,
+      "epochs": 2,
+      "patience": 2,
+      "warmup_ratio": 0.1,
+      "weight_decay": 0.01,
+      "grad_accum_steps": 3,
+      "seed": 42
+    }
+  },
+  {
+    "profile": "balanced",
+    "model": "Multimodal-full",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "failed",
+    "elapsed_seconds": 8.682607412338257,
+    "error": "worker process exited with code 1"
+  },
+  {
+    "profile": "performance",
+    "model": "BERT",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "ok",
+    "elapsed_seconds": 13.689145565032959,
+    "f1_score": 0.9253731343283582,
+    "accuracy": 0.921875,
+    "best_val_f1": 0.9230769230769231,
+    "best_config": {
+      "bert_lr": 2e-05,
+      "cls_lr": 0.0001,
+      "batch_size": 16,
+      "max_length": 128,
+      "epochs": 2,
+      "patience": 2
+    }
+  },
+  {
+    "profile": "performance",
+    "model": "BERT-TextCNN",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "ok",
+    "elapsed_seconds": 11.062465190887451,
+    "f1_score": 0.6808510638297872,
+    "accuracy": 0.53125,
+    "best_val_f1": 0.6881720430107527,
+    "best_config": {
+      "bert_lr": 2e-05,
+      "cnn_lr": 0.0001,
+      "batch_size": 16,
+      "max_length": 128,
+      "epochs": 2,
+      "patience": 2,
+      "warmup_ratio": 0.1,
+      "weight_decay": 0.01,
+      "grad_accum_steps": 2,
+      "seed": 42
+    }
+  },
+  {
+    "profile": "performance",
+    "model": "Multimodal-full",
+    "seed": 42,
+    "sample_size": 256,
+    "status": "failed",
+    "elapsed_seconds": 5.653592109680176,
+    "error": "worker process exited with code 1"
+  }
+]
